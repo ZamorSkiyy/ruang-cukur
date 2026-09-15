@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#211a16">
+  <meta name="description" content="Ruang Cukur Barbershop App">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>Ruang Cukur</title>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">RUANG CUKUR</p>
+        <h1>Dashboard</h1>
+      </div>
+      <span class="role">OWNER</span>
+    </header>
+
+    <section class="stats">
+      <div class="card stat"><span>Omzet Hari Ini</span><strong id="omzet">Rp0</strong></div>
+      <div class="card stat"><span>Transaksi</span><strong id="jumlah">0</strong></div>
+      <div class="card stat"><span>Bagian Barber</span><strong id="barberTotal">Rp0</strong></div>
+      <div class="card stat"><span>Bagian Owner</span><strong id="ownerTotal">Rp0</strong></div>
+    </section>
+
+    <section class="card form-card">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">TRANSAKSI BARU</span>
+          <h2>Tambah transaksi</h2>
+        </div>
+      </div>
+
+      <label>Nama Barber</label>
+      <input id="barber" placeholder="Contoh: Andi">
+
+      <label>Layanan</label>
+      <div id="services" class="services"></div>
+
+      <label>Metode Pembayaran</label>
+      <div class="payments">
+        <button class="pay active" data-pay="Cash">Cash</button>
+        <button class="pay" data-pay="QRIS">QRIS</button>
+        <button class="pay" data-pay="Transfer">Transfer</button>
+      </div>
+
+      <button id="save" class="primary">Simpan Transaksi</button>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">RIWAYAT</span>
+          <h2>Transaksi terbaru</h2>
+        </div>
+        <button id="clear" class="ghost">Reset</button>
+      </div>
+      <div id="history" class="history"><p class="empty">Belum ada transaksi.</p></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

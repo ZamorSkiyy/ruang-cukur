@@ -1,0 +1,10 @@
+{
+  "name": "Ruang Cukur",
+  "short_name": "Ruang Cukur",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f0ed",
+  "theme_color": "#241d19",
+  "description": "Aplikasi manajemen Ruang Cukur",
+  "icons": []
+}
