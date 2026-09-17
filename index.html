@@ -1,67 +1,388 @@
 <!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#211a16">
-  <meta name="description" content="Ruang Cukur Barbershop App">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <meta
+    name="theme-color"
+    content="#171717"
+  >
+
+  <link
+    rel="manifest"
+    href="manifest.json"
+  >
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
   <title>Ruang Cukur</title>
 </head>
+
 <body>
-  <main class="app">
-    <header class="topbar">
+
+<main class="app">
+
+  <!-- =========================
+       LOGIN
+  ========================== -->
+
+  <section
+    id="loginView"
+    class="card login"
+  >
+
+    <div class="brand">
+      RUANG <span>CUKUR</span>
+    </div>
+
+    <p class="muted">
+      Sistem manajemen barbershop
+    </p>
+
+    <h1>Masuk</h1>
+
+    <form id="loginForm">
+
+      <label>
+        Email
+
+        <input
+          id="email"
+          type="email"
+          autocomplete="email"
+          required
+        >
+      </label>
+
+      <label>
+        Password
+
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+      </label>
+
+      <button
+        class="primary"
+        type="submit"
+      >
+        Masuk
+      </button>
+
+      <p
+        id="loginError"
+        class="error"
+      ></p>
+
+    </form>
+
+  </section>
+
+
+  <!-- =========================
+       APLIKASI
+  ========================== -->
+
+  <section
+    id="appView"
+    hidden
+  >
+
+    <!-- HEADER -->
+
+    <header class="top">
+
       <div>
-        <p class="eyebrow">RUANG CUKUR</p>
-        <h1>Dashboard</h1>
+
+        <div class="brand small">
+          RUANG <span>CUKUR</span>
+        </div>
+
+        <div
+          id="userLabel"
+          class="muted"
+        ></div>
+
       </div>
-      <span class="role">OWNER</span>
+
+      <button
+        id="logoutBtn"
+        class="ghost"
+        type="button"
+      >
+        Keluar
+      </button>
+
     </header>
 
-    <section class="stats">
-      <div class="card stat"><span>Omzet Hari Ini</span><strong id="omzet">Rp0</strong></div>
-      <div class="card stat"><span>Transaksi</span><strong id="jumlah">0</strong></div>
-      <div class="card stat"><span>Bagian Barber</span><strong id="barberTotal">Rp0</strong></div>
-      <div class="card stat"><span>Bagian Owner</span><strong id="ownerTotal">Rp0</strong></div>
-    </section>
 
-    <section class="card form-card">
-      <div class="section-title">
-        <div>
-          <span class="eyebrow">TRANSAKSI BARU</span>
-          <h2>Tambah transaksi</h2>
+    <!-- NAVIGASI -->
+
+    <nav
+      id="nav"
+      class="nav"
+    >
+
+      <button
+        data-page="dashboard"
+        class="active"
+        type="button"
+      >
+        Dashboard
+      </button>
+
+      <button
+        data-page="transactions"
+        type="button"
+      >
+        Transaksi
+      </button>
+
+      <button
+        id="servicesNav"
+        data-page="services"
+        type="button"
+      >
+        Layanan
+      </button>
+
+    </nav>
+
+
+    <!-- =========================
+         DASHBOARD
+    ========================== -->
+
+    <section
+      id="page-dashboard"
+      class="page"
+    >
+
+      <h1>Dashboard</h1>
+
+      <p class="muted">
+        Ringkasan hari ini
+      </p>
+
+
+      <div class="stats">
+
+        <div class="stat">
+          <span>Omzet</span>
+
+          <b id="statOmzet">
+            Rp0
+          </b>
         </div>
-      </div>
 
-      <label>Nama Barber</label>
-      <input id="barber" placeholder="Contoh: Andi">
 
-      <label>Layanan</label>
-      <div id="services" class="services"></div>
+        <div class="stat">
+          <span>Bagian Barber</span>
 
-      <label>Metode Pembayaran</label>
-      <div class="payments">
-        <button class="pay active" data-pay="Cash">Cash</button>
-        <button class="pay" data-pay="QRIS">QRIS</button>
-        <button class="pay" data-pay="Transfer">Transfer</button>
-      </div>
-
-      <button id="save" class="primary">Simpan Transaksi</button>
-    </section>
-
-    <section class="card">
-      <div class="section-title">
-        <div>
-          <span class="eyebrow">RIWAYAT</span>
-          <h2>Transaksi terbaru</h2>
+          <b id="statBarber">
+            Rp0
+          </b>
         </div>
-        <button id="clear" class="ghost">Reset</button>
-      </div>
-      <div id="history" class="history"><p class="empty">Belum ada transaksi.</p></div>
-    </section>
-  </main>
 
-  <script src="app.js"></script>
+
+        <div class="stat">
+          <span>Bagian Owner</span>
+
+          <b id="statOwner">
+            Rp0
+          </b>
+        </div>
+
+
+        <div class="stat">
+          <span>Transaksi</span>
+
+          <b id="statCount">
+            0
+          </b>
+        </div>
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>
+          Transaksi terbaru
+        </h2>
+
+        <div
+          id="recent"
+          class="muted"
+        >
+          Memuat...
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         TRANSAKSI
+    ========================== -->
+
+    <section
+      id="page-transactions"
+      class="page"
+      hidden
+    >
+
+      <h1>Transaksi</h1>
+
+      <p class="muted">
+        Input transaksi baru
+      </p>
+
+
+      <form
+        id="transactionForm"
+        class="card"
+      >
+
+        <label>
+          Barber
+
+          <select
+            id="barberSelect"
+            required
+          ></select>
+
+        </label>
+
+
+        <label>
+          Layanan
+
+          <select
+            id="serviceSelect"
+            required
+          ></select>
+
+        </label>
+
+
+        <label>
+          Pembayaran
+
+          <select
+            id="paymentSelect"
+            required
+          >
+
+            <option value="cash">
+              Cash
+            </option>
+
+            <option value="qris">
+              QRIS
+            </option>
+
+            <option value="transfer">
+              Transfer
+            </option>
+
+          </select>
+
+        </label>
+
+
+        <button
+          class="primary"
+          type="submit"
+        >
+          Simpan Transaksi
+        </button>
+
+
+        <p
+          id="transactionMessage"
+          class="message"
+        ></p>
+
+      </form>
+
+
+      <div class="card">
+
+        <h2>
+          Riwayat
+        </h2>
+
+        <div
+          id="transactionList"
+          class="muted"
+        >
+          Memuat...
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         LAYANAN
+    ========================== -->
+
+    <section
+      id="page-services"
+      class="page"
+      hidden
+    >
+
+      <h1>Layanan</h1>
+
+      <p class="muted">
+        Harga layanan Ruang Cukur
+      </p>
+
+
+      <div
+        class="card"
+        id="serviceList"
+      >
+        Memuat...
+      </div>
+
+    </section>
+
+  </section>
+
+</main>
+
+
+<!-- SUPABASE -->
+
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+></script>
+
+
+<!-- CONFIG -->
+
+<script src="config.js"></script>
+
+
+<!-- APP -->
+
+<script src="app.js"></script>
+
 </body>
 </html>
