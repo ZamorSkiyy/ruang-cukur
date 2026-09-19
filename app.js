@@ -226,21 +226,19 @@ logoutBtn.addEventListener("click", async () => {
 // ======================================================
 
 async function loadServices() {
-
   const { data, error } = await supabaseClient
-  .from("services")
-  .select("*")
-  .eq("status", "active")
-  .order("name");
+    .from("services")
+    .select("id, code, name, price, status")
+    .order("name");
 
   if (error) {
+    console.error("SERVICES ERROR:", error);
     throw error;
   }
 
   services = data || [];
-
-  renderServiceSelect();
   renderServices();
+  fillServiceSelect();
 }
 
 // ======================================================
