@@ -228,10 +228,10 @@ logoutBtn.addEventListener("click", async () => {
 async function loadServices() {
 
   const { data, error } = await supabaseClient
-    .from("services")
-    .select("*")
-    .eq("active", true)
-    .order("name");
+  .from("services")
+  .select("*")
+  .eq("status", "active")
+  .order("name");
 
   if (error) {
     throw error;
