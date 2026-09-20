@@ -236,9 +236,9 @@ async function loadServices() {
     throw error;
   }
 
-  services = data || [];
-  renderServices();
-  fillServiceSelect();
+services = data || [];
+renderServices();
+renderServiceSelect();
 }
 
 // ======================================================
