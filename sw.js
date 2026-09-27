@@ -1,1 +1,54 @@
-const CACHE="ruang-cukur-v01";const ASSETS=["./","./index.html","./style.css","./app.js","./manifest.json"];self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+const CACHE = "ruang-cukur-v02";
+
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./config.js",
+  "./manifest.json"
+];
+
+// Install versi baru
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+// Hapus cache versi lama
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys =>
+        Promise.all(
+          keys
+            .filter(key => key !== CACHE)
+            .map(key => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+// Untuk file aplikasi, utamakan versi terbaru dari server
+self.addEventListener("fetch", event => {
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+
+        const copy = response.clone();
+
+        caches.open(CACHE).then(cache => {
+          cache.put(event.request, copy);
+        });
+
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request)
+      )
+  );
+});
