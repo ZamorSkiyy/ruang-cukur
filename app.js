@@ -24,18 +24,31 @@ const transactionForm = $("transactionForm");
 const transactionMessage = $("transactionMessage");
 const transactionList = $("transactionList");
 const serviceList = $("serviceList");
+const serviceForm = $("serviceForm");
+const serviceName = $("serviceName");
+const serviceCode = $("serviceCode");
+const servicePrice = $("servicePrice");
+const serviceMessage = $("serviceMessage");
+const serviceFormTitle = $("serviceFormTitle");
+const serviceSaveBtn = $("serviceSaveBtn");
+const serviceCancelBtn = $("serviceCancelBtn");
 const payrollPeriodSelect = $("payrollPeriodSelect");
 const payrollList = $("payrollList");
 const payrollSummary = $("payrollSummary");
 const payrollMessage = $("payrollMessage");
 const settingsList = $("settingsList");
 const settingsMessage = $("settingsMessage");
+const barberManagerList = $("barberManagerList");
+const barberForm = $("barberForm");
+const barberMessage = $("barberMessage");
+const barberManagerNav = $("barbersNav");
 
 let currentUser = null;
 let currentProfile = null;
 let services = [];
 let barbers = [];
 let payrollSettings = [];
+let editingServiceId = null;
 
 function rupiah(value) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -58,9 +71,10 @@ function showPage(page) {
   if (page === "services") renderServices();
   if (page === "payroll") { populatePayrollPeriods(); loadPayroll(); }
   if (page === "payroll-settings") loadPayrollSettings();
+  if (page === "barbers") loadBarberManagement();
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
-  if (button.id === "payrollSettingsNav" && !isAdmin()) return;
+  if (["payrollSettingsNav", "barbersNav"].includes(button.id) && !isAdmin()) return;
   showPage(button.dataset.page);
 }));
 
@@ -82,26 +96,271 @@ async function loadProfile() {
   const { data, error } = await supabaseClient.from("profiles").select("*").eq("id", currentUser.id).single();
   if (error) throw error;
   currentProfile = data;
+  if (data.status === "inactive" && data.role === "barber") {
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    currentProfile = null;
+    throw new Error("Akun barber ini sedang nonaktif. Hubungi Owner/Admin.");
+  }
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
   $("payrollSettingsNav").hidden = !isAdmin();
+  barberManagerNav.hidden = !isAdmin();
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
 
 async function loadServices() {
-  const { data, error } = await supabaseClient.from("services").select("id, code, name, price, status").eq("status", "active").order("name");
+  const { data, error } = await supabaseClient
+    .from("services")
+    .select("id, code, name, price, status")
+    .eq("status", "active")
+    .order("name");
   if (error) throw error;
-  services = data || []; renderServices(); renderServiceSelect();
+  services = data || [];
+  renderServices();
+  renderServiceSelect();
 }
+
 function renderServiceSelect() {
-  serviceSelect.innerHTML = services.length ? services.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${rupiah(s.price)}</option>`).join("") : `<option value="">Belum ada layanan</option>`;
+  serviceSelect.innerHTML = services.length
+    ? services.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${rupiah(s.price)}</option>`).join("")
+    : `<option value="">Belum ada layanan</option>`;
 }
+
+function resetServiceForm() {
+  editingServiceId = null;
+  serviceForm.reset();
+  serviceFormTitle.textContent = "Tambah Layanan";
+  serviceSaveBtn.textContent = "Tambah Layanan";
+  serviceCancelBtn.hidden = true;
+  setMessage(serviceMessage, "");
+}
+
+function startEditService(id) {
+  if (!isAdmin()) return;
+  const service = services.find(s => s.id === id);
+  if (!service) return;
+
+  editingServiceId = id;
+  serviceName.value = service.name || "";
+  serviceCode.value = service.code || "";
+  servicePrice.value = Number(service.price || 0);
+  serviceFormTitle.textContent = "Edit Layanan";
+  serviceSaveBtn.textContent = "Simpan Perubahan";
+  serviceCancelBtn.hidden = false;
+  setMessage(serviceMessage, "");
+  serviceName.focus();
+}
+
+async function deleteService(id) {
+  if (!isAdmin()) return;
+  const service = services.find(s => s.id === id);
+  if (!service) return;
+
+  const ok = confirm(`Hapus layanan "${service.name}"?\n\nLayanan akan dinonaktifkan. Transaksi lama tetap aman.`);
+  if (!ok) return;
+
+  setMessage(serviceMessage, "Menghapus layanan...");
+  try {
+    const { error } = await supabaseClient
+      .from("services")
+      .update({ status: "inactive" })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    if (editingServiceId === id) resetServiceForm();
+    setMessage(serviceMessage, `Layanan "${service.name}" berhasil dihapus.`);
+    await loadServices();
+  } catch (error) {
+    console.error(error);
+    setMessage(serviceMessage, `Gagal menghapus: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+}
+
 function renderServices() {
-  serviceList.innerHTML = services.length ? services.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${esc(s.code || "")}</div></div><strong>${rupiah(s.price)}</strong></div>`).join("") : `<p class="muted">Belum ada layanan.</p>`;
+  if (!services.length) {
+    serviceList.innerHTML = `<p class="muted">Belum ada layanan aktif.</p>`;
+    return;
+  }
+
+  const actions = isAdmin();
+  serviceList.innerHTML = services.map(s => `
+    <div class="list-row service-row">
+      <div>
+        <strong>${esc(s.name)}</strong>
+        <div class="muted">${esc(s.code || "")}</div>
+      </div>
+      <div class="service-actions">
+        <strong>${rupiah(s.price)}</strong>
+        ${actions ? `
+          <div class="button-row">
+            <button class="ghost service-edit-btn" type="button" data-id="${esc(s.id)}">Edit</button>
+            <button class="danger service-delete-btn" type="button" data-id="${esc(s.id)}">Hapus</button>
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `).join("");
+
+  serviceList.querySelectorAll(".service-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => startEditService(btn.dataset.id));
+  });
+  serviceList.querySelectorAll(".service-delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteService(btn.dataset.id));
+  });
 }
+
+serviceForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+
+  const name = serviceName.value.trim();
+  const code = serviceCode.value.trim().toUpperCase();
+  const price = Number(servicePrice.value);
+
+  if (!name || !code || !Number.isFinite(price) || price < 0) {
+    setMessage(serviceMessage, "Nama, kode, dan harga layanan wajib diisi dengan benar.", true);
+    return;
+  }
+
+  setMessage(serviceMessage, editingServiceId ? "Menyimpan perubahan..." : "Menambahkan layanan...");
+
+  try {
+    let error;
+
+    if (editingServiceId) {
+      ({ error } = await supabaseClient
+        .from("services")
+        .update({ name, code, price })
+        .eq("id", editingServiceId));
+    } else {
+      ({ error } = await supabaseClient
+        .from("services")
+        .insert({ name, code, price, status: "active" }));
+    }
+
+    if (error) throw error;
+
+    setMessage(serviceMessage, editingServiceId
+      ? "Layanan berhasil diperbarui."
+      : "Layanan berhasil ditambahkan.");
+
+    resetServiceForm();
+    await loadServices();
+  } catch (error) {
+    console.error(error);
+    setMessage(serviceMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+});
+
+serviceCancelBtn.addEventListener("click", resetServiceForm);
 async function loadBarbers() {
   const { data, error } = await supabaseClient.from("profiles").select("id,name,email,role,status").eq("role", "barber").eq("status", "active").order("name");
   if (error) throw error; barbers = data || []; renderBarberSelect();
 }
+
+async function loadBarberManagement() {
+  if (!isAdmin()) return;
+  barberManagerList.innerHTML = "Memuat...";
+  try {
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .select("id,name,email,role,status")
+      .eq("role", "barber")
+      .order("status", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw error;
+
+    const rows = data || [];
+    if (!rows.length) {
+      barberManagerList.innerHTML = `<p class="muted">Belum ada barber.</p>`;
+      return;
+    }
+
+    barberManagerList.innerHTML = rows.map(b => {
+      const active = b.status === "active";
+      return `<div class="list-row barber-manager-row">
+        <div>
+          <strong>${esc(b.name || "Tanpa nama")}</strong>
+          <div class="muted">${esc(b.email || "")}</div>
+          <span class="badge ${active ? "badge-active" : "badge-inactive"}">${active ? "AKTIF" : "NONAKTIF"}</span>
+        </div>
+        <div class="button-row">
+          ${active
+            ? `<button class="danger barber-status-btn" type="button" data-action="deactivate" data-id="${esc(b.id)}" data-name="${esc(b.name || b.email || "Barber")}">Nonaktifkan</button>`
+            : `<button class="ghost barber-status-btn" type="button" data-action="activate" data-id="${esc(b.id)}" data-name="${esc(b.name || b.email || "Barber")}">Aktifkan</button>`}
+        </div>
+      </div>`;
+    }).join("");
+
+    barberManagerList.querySelectorAll(".barber-status-btn").forEach(btn => {
+      btn.addEventListener("click", () => changeBarberStatus(btn.dataset.action, btn.dataset.id, btn.dataset.name));
+    });
+  } catch (error) {
+    console.error(error);
+    barberManagerList.innerHTML = `<p class="error">Gagal memuat barber: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+  }
+}
+
+async function changeBarberStatus(action, barberId, barberName) {
+  if (!isAdmin()) return;
+  const isDeactivate = action === "deactivate";
+  const ok = confirm(isDeactivate
+    ? `Nonaktifkan barber "${barberName}"?\n\nRiwayat transaksi dan payroll tetap aman.`
+    : `Aktifkan kembali barber "${barberName}"?`);
+  if (!ok) return;
+
+  setMessage(barberMessage, isDeactivate ? "Menonaktifkan barber..." : "Mengaktifkan barber...");
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("manage-barber", {
+      body: { action, barber_id: barberId }
+    });
+    if (error) throw error;
+    if (data?.success === false) throw new Error(data.error || "Operasi gagal.");
+    setMessage(barberMessage, data?.message || (isDeactivate ? "Barber dinonaktifkan." : "Barber diaktifkan."));
+    await loadBarbers();
+    await loadBarberManagement();
+  } catch (error) {
+    console.error(error);
+    setMessage(barberMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+}
+
+barberForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+
+  const name = $("barberName").value.trim();
+  const email = $("barberEmail").value.trim();
+  const password = $("barberPassword").value;
+  if (!name || !email || password.length < 6) {
+    setMessage(barberMessage, "Nama, email, dan password minimal 6 karakter wajib diisi.", true);
+    return;
+  }
+
+  setMessage(barberMessage, "Membuat akun barber...");
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("manage-barber", {
+      body: { action: "create", name, email, password }
+    });
+    if (error) throw error;
+    if (data?.success === false) throw new Error(data.error || "Gagal membuat barber.");
+
+    barberForm.reset();
+    setMessage(barberMessage, data?.message || "Barber berhasil ditambahkan.");
+    await loadBarbers();
+    await loadBarberManagement();
+  } catch (error) {
+    console.error(error);
+    setMessage(barberMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+});
+
+$("refreshBarbersBtn").addEventListener("click", async () => {
+  await loadBarbers();
+  await loadBarberManagement();
+});
+
 function renderBarberSelect() {
   barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
 }

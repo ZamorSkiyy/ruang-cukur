@@ -308,3 +308,64 @@ select:focus {
   }
 
 }
+/* =========================
+   SERVICE MANAGEMENT
+========================= */
+
+.service-row {
+  align-items: flex-start;
+}
+
+.service-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.button-row {
+  display: flex;
+  gap: 6px;
+}
+
+.button-row .ghost,
+.button-row .danger {
+  width: auto;
+  padding: 8px 11px;
+}
+
+.danger {
+  border: 1px solid #e0b4b4;
+  background: #fff;
+  color: #b42318;
+  border-radius: 10px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.danger:active,
+.button-row .ghost:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 480px) {
+  .service-row {
+    gap: 10px;
+  }
+
+  .service-actions {
+    min-width: 105px;
+  }
+
+  .button-row {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .button-row .ghost,
+  .button-row .danger {
+    font-size: 13px;
+    padding: 7px 9px;
+  }
+}

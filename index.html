@@ -37,6 +37,7 @@
       <button data-page="services" type="button">Layanan</button>
       <button data-page="payroll" type="button">Payroll</button>
       <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
+      <button data-page="barbers" type="button" id="barbersNav">Barber</button>
     </nav>
 
     <section id="page-dashboard" class="page">
@@ -75,9 +76,36 @@
     </section>
 
     <section id="page-services" class="page" hidden>
-      <h1>Layanan</h1>
-      <p class="muted">Harga layanan Ruang Cukur</p>
-      <div class="card" id="serviceList">Memuat...</div>
+      <div class="page-heading">
+        <div><h1>Layanan</h1><p class="muted">Harga layanan Ruang Cukur</p></div>
+      </div>
+
+      <div class="card" id="serviceManagerCard">
+        <h2 id="serviceFormTitle">Tambah Layanan</h2>
+        <form id="serviceForm">
+          <div class="form-grid">
+            <label>Nama layanan
+              <input id="serviceName" required placeholder="Contoh: Cukur + Keramas">
+            </label>
+            <label>Kode layanan
+              <input id="serviceCode" required placeholder="Contoh: CUKUR_B" maxlength="50">
+            </label>
+          </div>
+          <label>Harga
+            <input id="servicePrice" type="number" min="0" step="1000" required placeholder="35000">
+          </label>
+          <div class="form-grid">
+            <button id="serviceSaveBtn" class="primary" type="submit">Tambah Layanan</button>
+            <button id="serviceCancelBtn" class="ghost" type="button" hidden>Batal Edit</button>
+          </div>
+          <p id="serviceMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Daftar Layanan Aktif</h2>
+        <div id="serviceList" class="muted">Memuat...</div>
+      </div>
     </section>
 
     <section id="page-payroll" class="page" hidden>
@@ -131,6 +159,37 @@
       <div class="card">
         <h2>Riwayat Aturan</h2>
         <div id="settingsList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-barbers" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Manajemen Barber</h1><p class="muted">Tambah, aktifkan, atau nonaktifkan akun barber.</p></div>
+        <button id="refreshBarbersBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card" id="barberManagerCard">
+        <h2>Tambah Barber</h2>
+        <form id="barberForm">
+          <div class="form-grid">
+            <label>Nama barber
+              <input id="barberName" required placeholder="Contoh: Adit">
+            </label>
+            <label>Email login
+              <input id="barberEmail" type="email" autocomplete="off" required placeholder="barber@email.com">
+            </label>
+          </div>
+          <label>Password login
+            <input id="barberPassword" type="password" minlength="6" autocomplete="new-password" required placeholder="Minimal 6 karakter">
+          </label>
+          <button class="primary" type="submit">Tambah Barber</button>
+          <p id="barberMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Daftar Barber</h2>
+        <div id="barberManagerList" class="muted">Memuat...</div>
       </div>
     </section>
   </section>
