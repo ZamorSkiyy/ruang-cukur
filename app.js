@@ -44,6 +44,14 @@ const barberMessage = $("barberMessage");
 const barberManagerNav = $("barbersNav");
 const productsNav = $("productsNav");
 const productSalesNav = $("productSalesNav");
+const expenseForm = $("expenseForm");
+const expenseMessage = $("expenseMessage");
+const expenseList = $("expenseList");
+const expenseDate = $("expenseDate");
+const expenseCategory = $("expenseCategory");
+const expenseDescription = $("expenseDescription");
+const expenseAmount = $("expenseAmount");
+const expensePayment = $("expensePayment");
 const saleProductSelect = $("saleProductSelect");
 const saleQuantity = $("saleQuantity");
 const salePaymentSelect = $("salePaymentSelect");
@@ -91,6 +99,7 @@ function showPage(page) {
   if (page === "barbers") loadBarberManagement();
   if (page === "products") loadProducts();
   if (page === "product-sales") { loadProductsForSale(); loadProductSales(); }
+  if (page === "expenses") loadExpenses();
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
   if (["payrollSettingsNav", "barbersNav"].includes(button.id) && !isAdmin()) return;
@@ -104,6 +113,7 @@ loginForm.addEventListener("submit", async event => {
     if (error) throw error;
     if (!data.session) throw new Error("Login berhasil tetapi session tidak terbentuk.");
     currentUser = data.user;
+    resetExpenseForm();
     await loadProfile(); await loadServices(); await loadBarbers();
     showApp(); showPage("dashboard");
   } catch (error) {
@@ -578,6 +588,82 @@ productSaleForm.addEventListener("submit", async event => {
 $("refreshProductSalesBtn").addEventListener("click", async () => {
   await Promise.all([loadProductsForSale(), loadProductSales()]);
 });
+
+function todayLocalISO() {
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
+function resetExpenseForm() {
+  expenseForm.reset();
+  expenseDate.value = todayLocalISO();
+  expenseCategory.value = "Operasional";
+  expensePayment.value = "cash";
+  setMessage(expenseMessage, "");
+}
+
+async function loadExpenses() {
+  expenseList.innerHTML = "Memuat...";
+  try {
+    const { data, error } = await supabaseClient
+      .from("expenses")
+      .select("id, expense_date, category, description, amount, payment_method, created_by, profiles:created_by(name, email)")
+      .order("expense_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    const rows = data || [];
+    expenseList.innerHTML = rows.length ? rows.map(e => `
+      <div class="list-row">
+        <div>
+          <strong>${esc(e.description)}</strong>
+          <div class="muted">${esc(e.expense_date)} • ${esc(e.category)} • ${esc(String(e.payment_method || "").toUpperCase())}</div>
+          <div class="muted">${esc(e.profiles?.name || e.profiles?.email || "Pengguna")}</div>
+        </div>
+        <strong>${rupiah(e.amount)}</strong>
+      </div>`).join("") : `<p class="muted">Belum ada pengeluaran.</p>`;
+  } catch (error) {
+    console.error(error);
+    expenseList.innerHTML = `<p class="error">Gagal memuat pengeluaran: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+  }
+}
+
+expenseForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const date = expenseDate.value;
+  const category = expenseCategory.value;
+  const description = expenseDescription.value.trim();
+  const amount = Number(expenseAmount.value);
+  const paymentMethod = expensePayment.value;
+
+  if (!date || !category || !description || !Number.isFinite(amount) || amount < 0) {
+    setMessage(expenseMessage, "Tanggal, kategori, keterangan, dan nominal harus diisi dengan benar.", true);
+    return;
+  }
+
+  setMessage(expenseMessage, "Menyimpan pengeluaran...");
+  try {
+    const { error } = await supabaseClient.from("expenses").insert({
+      expense_date: date,
+      category,
+      description,
+      amount,
+      payment_method: paymentMethod,
+      created_by: currentUser.id
+    });
+    if (error) throw error;
+    setMessage(expenseMessage, "Pengeluaran berhasil disimpan.");
+    expenseDescription.value = "";
+    expenseAmount.value = "";
+    await loadExpenses();
+  } catch (error) {
+    console.error(error);
+    setMessage(expenseMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+});
+
+$("refreshExpensesBtn").addEventListener("click", loadExpenses);
 
 productForm.addEventListener("submit", async event => {
   event.preventDefault();

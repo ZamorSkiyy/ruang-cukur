@@ -40,6 +40,7 @@
       <button data-page="barbers" type="button" id="barbersNav">Barber</button>
       <button data-page="products" type="button" id="productsNav">Produk</button>
       <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
+      <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
     </nav>
 
     <section id="page-dashboard" class="page">
@@ -239,6 +240,59 @@
       <div class="card">
         <h2>Riwayat Penjualan</h2>
         <div id="productSalesList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-expenses" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Pengeluaran</h1><p class="muted">Catat biaya operasional Ruang Cukur.</p></div>
+        <button id="refreshExpensesBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Catat Pengeluaran</h2>
+        <form id="expenseForm">
+          <div class="form-grid">
+            <label>Tanggal
+              <input id="expenseDate" type="date" required>
+            </label>
+            <label>Kategori
+              <select id="expenseCategory" required>
+                <option value="Operasional">Operasional</option>
+                <option value="Listrik">Listrik</option>
+                <option value="Air">Air</option>
+                <option value="Internet">Internet</option>
+                <option value="Perlengkapan Barber">Perlengkapan Barber</option>
+                <option value="Produk / Stok">Produk / Stok</option>
+                <option value="Kebersihan">Kebersihan</option>
+                <option value="Perbaikan">Perbaikan</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </label>
+          </div>
+          <label>Keterangan
+            <input id="expenseDescription" required placeholder="Contoh: Bayar listrik bulan Oktober">
+          </label>
+          <div class="form-grid">
+            <label>Nominal
+              <input id="expenseAmount" type="number" min="0" step="100" required placeholder="350000">
+            </label>
+            <label>Pembayaran
+              <select id="expensePayment" required>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <button class="primary" type="submit">Simpan Pengeluaran</button>
+          <p id="expenseMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Riwayat Pengeluaran</h2>
+        <div id="expenseList" class="muted">Memuat...</div>
       </div>
     </section>
 
