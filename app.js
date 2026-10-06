@@ -43,6 +43,14 @@ const barberForm = $("barberForm");
 const barberMessage = $("barberMessage");
 const barberManagerNav = $("barbersNav");
 const productsNav = $("productsNav");
+const productSalesNav = $("productSalesNav");
+const saleProductSelect = $("saleProductSelect");
+const saleQuantity = $("saleQuantity");
+const salePaymentSelect = $("salePaymentSelect");
+const salePreview = $("salePreview");
+const productSaleForm = $("productSaleForm");
+const productSaleMessage = $("productSaleMessage");
+const productSalesList = $("productSalesList");
 const productList = $("productList");
 const productForm = $("productForm");
 const productMessage = $("productMessage");
@@ -82,6 +90,7 @@ function showPage(page) {
   if (page === "payroll-settings") loadPayrollSettings();
   if (page === "barbers") loadBarberManagement();
   if (page === "products") loadProducts();
+  if (page === "product-sales") { loadProductsForSale(); loadProductSales(); }
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
   if (["payrollSettingsNav", "barbersNav"].includes(button.id) && !isAdmin()) return;
@@ -463,6 +472,112 @@ function renderProducts() {
   productList.querySelectorAll(".product-edit-btn").forEach(btn => btn.addEventListener("click", () => startEditProduct(btn.dataset.id)));
   productList.querySelectorAll(".product-status-btn").forEach(btn => btn.addEventListener("click", () => toggleProductStatus(btn.dataset.id)));
 }
+
+async function loadProductsForSale() {
+  try {
+    const { data, error } = await supabaseClient
+      .from("products")
+      .select("id, code, name, sell_price, stock, status")
+      .eq("status", "active")
+      .gt("stock", 0)
+      .order("name");
+    if (error) throw error;
+    const saleProducts = data || [];
+    saleProductSelect.innerHTML = saleProducts.length
+      ? saleProducts.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — ${rupiah(p.sell_price)} (stok ${Number(p.stock || 0)})</option>`).join("")
+      : `<option value="">Tidak ada produk aktif dengan stok</option>`;
+    updateSalePreview(saleProducts);
+  } catch (error) {
+    console.error(error);
+    saleProductSelect.innerHTML = `<option value="">Gagal memuat produk</option>`;
+    salePreview.textContent = `Gagal memuat produk: ${error.message || "Terjadi kesalahan."}`;
+  }
+}
+
+async function loadProductSales() {
+  productSalesList.innerHTML = "Memuat...";
+  try {
+    const { data, error } = await supabaseClient
+      .from("product_sales")
+      .select("id, sale_date, quantity, unit_price, total_amount, payment_method, product_id, sold_by, products:product_id(name, code), profiles:sold_by(name, email)")
+      .order("sale_date", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    const rows = data || [];
+    productSalesList.innerHTML = rows.length ? rows.map(s => `
+      <div class="list-row">
+        <div>
+          <strong>${esc(s.products?.name || "Produk")}</strong>
+          <div class="muted">${new Date(s.sale_date).toLocaleString("id-ID")} • ${esc(s.profiles?.name || s.profiles?.email || "Pengguna")}</div>
+          <div class="muted">${Number(s.quantity)} × ${rupiah(s.unit_price)} • ${esc(String(s.payment_method || "").toUpperCase())}</div>
+        </div>
+        <strong>${rupiah(s.total_amount)}</strong>
+      </div>`).join("") : `<p class="muted">Belum ada penjualan produk.</p>`;
+  } catch (error) {
+    console.error(error);
+    productSalesList.innerHTML = `<p class="error">Gagal memuat penjualan: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+  }
+}
+
+async function updateSalePreview(saleProducts) {
+  const product = (saleProducts || []).find(p => p.id === saleProductSelect.value);
+  const qty = Math.max(1, Number(saleQuantity.value || 1));
+  if (!product) {
+    salePreview.textContent = "Pilih produk.";
+    return;
+  }
+  const total = Number(product.sell_price || 0) * qty;
+  salePreview.innerHTML = `Harga ${rupiah(product.sell_price)} × ${qty} = <strong>${rupiah(total)}</strong> • Stok tersedia ${Number(product.stock || 0)}`;
+}
+
+saleProductSelect.addEventListener("change", async () => {
+  try {
+    const { data, error } = await supabaseClient.from("products").select("id, name, sell_price, stock, status").eq("status", "active").gt("stock", 0).order("name");
+    if (error) throw error;
+    updateSalePreview(data || []);
+  } catch (error) {
+    salePreview.textContent = error.message || "Gagal memuat produk.";
+  }
+});
+saleQuantity.addEventListener("input", async () => {
+  const { data } = await supabaseClient.from("products").select("id, name, sell_price, stock, status").eq("status", "active").gt("stock", 0).order("name");
+  updateSalePreview(data || []);
+});
+
+productSaleForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const productId = saleProductSelect.value;
+  const quantity = Number(saleQuantity.value);
+  const paymentMethod = salePaymentSelect.value;
+  if (!productId) {
+    setMessage(productSaleMessage, "Pilih produk terlebih dahulu.", true);
+    return;
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    setMessage(productSaleMessage, "Jumlah harus minimal 1.", true);
+    return;
+  }
+  setMessage(productSaleMessage, "Menyimpan penjualan...");
+  try {
+    const { data, error } = await supabaseClient.rpc("sell_product", {
+      p_product_id: productId,
+      p_quantity: quantity,
+      p_payment_method: paymentMethod
+    });
+    if (error) throw error;
+    if (data?.success === false) throw new Error(data.message || "Penjualan gagal.");
+    setMessage(productSaleMessage, data?.message || "Penjualan produk berhasil disimpan.");
+    saleQuantity.value = 1;
+    await Promise.all([loadProductsForSale(), loadProductSales(), loadProducts()]);
+  } catch (error) {
+    console.error(error);
+    setMessage(productSaleMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+});
+
+$("refreshProductSalesBtn").addEventListener("click", async () => {
+  await Promise.all([loadProductsForSale(), loadProductSales()]);
+});
 
 productForm.addEventListener("submit", async event => {
   event.preventDefault();

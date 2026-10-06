@@ -39,6 +39,7 @@
       <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
       <button data-page="barbers" type="button" id="barbersNav">Barber</button>
       <button data-page="products" type="button" id="productsNav">Produk</button>
+      <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
     </nav>
 
     <section id="page-dashboard" class="page">
@@ -202,6 +203,42 @@
       <div class="card">
         <h2>Daftar Produk</h2>
         <div id="productList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-product-sales" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Penjualan Produk</h1><p class="muted">Catat penjualan produk dan stok akan berkurang otomatis.</p></div>
+        <button id="refreshProductSalesBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Catat Penjualan</h2>
+        <form id="productSaleForm">
+          <label>Produk
+            <select id="saleProductSelect" required></select>
+          </label>
+          <div class="form-grid">
+            <label>Jumlah
+              <input id="saleQuantity" type="number" min="1" step="1" value="1" required>
+            </label>
+            <label>Pembayaran
+              <select id="salePaymentSelect" required>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <div id="salePreview" class="sale-preview muted">Pilih produk.</div>
+          <button class="primary" type="submit">Simpan Penjualan</button>
+          <p id="productSaleMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Riwayat Penjualan</h2>
+        <div id="productSalesList" class="muted">Memuat...</div>
       </div>
     </section>
 

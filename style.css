@@ -396,3 +396,15 @@ select:focus {
   color: #b42318;
   background: #fbeaea;
 }
+
+
+/* =========================
+   PRODUCT SALES
+========================= */
+.sale-preview {
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fafafa;
+}
