@@ -42,6 +42,15 @@ const barberManagerList = $("barberManagerList");
 const barberForm = $("barberForm");
 const barberMessage = $("barberMessage");
 const barberManagerNav = $("barbersNav");
+const productsNav = $("productsNav");
+const productList = $("productList");
+const productForm = $("productForm");
+const productMessage = $("productMessage");
+const productFormTitle = $("productFormTitle");
+const productSaveBtn = $("productSaveBtn");
+const productCancelBtn = $("productCancelBtn");
+let products = [];
+let editingProductId = null;
 
 let currentUser = null;
 let currentProfile = null;
@@ -72,6 +81,7 @@ function showPage(page) {
   if (page === "payroll") { populatePayrollPeriods(); loadPayroll(); }
   if (page === "payroll-settings") loadPayrollSettings();
   if (page === "barbers") loadBarberManagement();
+  if (page === "products") loadProducts();
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
   if (["payrollSettingsNav", "barbersNav"].includes(button.id) && !isAdmin()) return;
@@ -105,6 +115,7 @@ async function loadProfile() {
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
+  productsNav.hidden = false;
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
 
@@ -360,6 +371,132 @@ $("refreshBarbersBtn").addEventListener("click", async () => {
   await loadBarbers();
   await loadBarberManagement();
 });
+
+async function loadProducts() {
+  productList.innerHTML = "Memuat...";
+  try {
+    const { data, error } = await supabaseClient
+      .from("products")
+      .select("id, code, name, cost_price, sell_price, stock, status")
+      .order("status", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw error;
+    products = data || [];
+    renderProducts();
+  } catch (error) {
+    console.error(error);
+    productList.innerHTML = `<p class="error">Gagal memuat produk: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+  }
+}
+
+function resetProductForm() {
+  editingProductId = null;
+  productForm.reset();
+  $("productCost").value = 0;
+  $("productSell").value = 0;
+  $("productStock").value = 0;
+  productFormTitle.textContent = "Tambah Produk";
+  productSaveBtn.textContent = "Tambah Produk";
+  productCancelBtn.hidden = true;
+  setMessage(productMessage, "");
+}
+
+function startEditProduct(id) {
+  if (!isAdmin()) return;
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  editingProductId = id;
+  $("productName").value = product.name || "";
+  $("productCode").value = product.code || "";
+  $("productCost").value = Number(product.cost_price || 0);
+  $("productSell").value = Number(product.sell_price || 0);
+  $("productStock").value = Number(product.stock || 0);
+  productFormTitle.textContent = "Edit Produk";
+  productSaveBtn.textContent = "Simpan Perubahan";
+  productCancelBtn.hidden = false;
+  setMessage(productMessage, "");
+  $("productName").focus();
+}
+
+async function toggleProductStatus(id) {
+  if (!isAdmin()) return;
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  const nextStatus = product.status === "active" ? "inactive" : "active";
+  const ok = confirm(`${nextStatus === "inactive" ? "Nonaktifkan" : "Aktifkan"} produk "${product.name}"?`);
+  if (!ok) return;
+  setMessage(productMessage, "Menyimpan status produk...");
+  try {
+    const { error } = await supabaseClient.from("products").update({ status: nextStatus, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+    setMessage(productMessage, `Produk berhasil ${nextStatus === "active" ? "diaktifkan" : "dinonaktifkan"}.`);
+    await loadProducts();
+  } catch (error) {
+    console.error(error);
+    setMessage(productMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+}
+
+function renderProducts() {
+  if (!products.length) {
+    productList.innerHTML = `<p class="muted">Belum ada produk.</p>`;
+    return;
+  }
+  const actions = isAdmin();
+  productList.innerHTML = products.map(p => `
+    <div class="list-row product-row">
+      <div>
+        <strong>${esc(p.name)}</strong>
+        <div class="muted">${esc(p.code || "")}</div>
+        <div class="muted">Modal ${rupiah(p.cost_price)} • Stok ${Number(p.stock || 0)}</div>
+        <span class="badge ${p.status === "active" ? "badge-active" : "badge-inactive"}">${p.status === "active" ? "AKTIF" : "NONAKTIF"}</span>
+      </div>
+      <div class="service-actions">
+        <strong>${rupiah(p.sell_price)}</strong>
+        ${actions ? `<div class="button-row">
+          <button class="ghost product-edit-btn" type="button" data-id="${esc(p.id)}">Edit</button>
+          <button class="${p.status === "active" ? "danger" : "ghost"} product-status-btn" type="button" data-id="${esc(p.id)}">${p.status === "active" ? "Nonaktifkan" : "Aktifkan"}</button>
+        </div>` : ""}
+      </div>
+    </div>`).join("");
+
+  productList.querySelectorAll(".product-edit-btn").forEach(btn => btn.addEventListener("click", () => startEditProduct(btn.dataset.id)));
+  productList.querySelectorAll(".product-status-btn").forEach(btn => btn.addEventListener("click", () => toggleProductStatus(btn.dataset.id)));
+}
+
+productForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const name = $("productName").value.trim();
+  const code = $("productCode").value.trim().toUpperCase();
+  const costPrice = Number($("productCost").value);
+  const sellPrice = Number($("productSell").value);
+  const stock = Number($("productStock").value);
+  if (!name || !Number.isFinite(costPrice) || costPrice < 0 || !Number.isFinite(sellPrice) || sellPrice < 0 || !Number.isInteger(stock) || stock < 0) {
+    setMessage(productMessage, "Nama, harga, dan stok harus diisi dengan benar.", true);
+    return;
+  }
+  setMessage(productMessage, editingProductId ? "Menyimpan perubahan..." : "Menambahkan produk...");
+  try {
+    let error;
+    const payload = { name, code: code || null, cost_price: costPrice, sell_price: sellPrice, stock, status: "active", updated_at: new Date().toISOString() };
+    if (editingProductId) {
+      ({ error } = await supabaseClient.from("products").update(payload).eq("id", editingProductId));
+    } else {
+      ({ error } = await supabaseClient.from("products").insert({ ...payload, created_by: currentUser.id }));
+    }
+    if (error) throw error;
+    setMessage(productMessage, editingProductId ? "Produk berhasil diperbarui." : "Produk berhasil ditambahkan.");
+    resetProductForm();
+    await loadProducts();
+  } catch (error) {
+    console.error(error);
+    setMessage(productMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
+  }
+});
+
+productCancelBtn.addEventListener("click", resetProductForm);
+$("refreshProductsBtn").addEventListener("click", loadProducts);
 
 function renderBarberSelect() {
   barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;

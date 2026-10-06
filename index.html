@@ -38,6 +38,7 @@
       <button data-page="payroll" type="button">Payroll</button>
       <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
       <button data-page="barbers" type="button" id="barbersNav">Barber</button>
+      <button data-page="products" type="button" id="productsNav">Produk</button>
     </nav>
 
     <section id="page-dashboard" class="page">
@@ -159,6 +160,48 @@
       <div class="card">
         <h2>Riwayat Aturan</h2>
         <div id="settingsList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-products" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Produk</h1><p class="muted">Master produk dan harga jual.</p></div>
+        <button id="refreshProductsBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card" id="productManagerCard">
+        <h2 id="productFormTitle">Tambah Produk</h2>
+        <form id="productForm">
+          <div class="form-grid">
+            <label>Nama produk
+              <input id="productName" required placeholder="Contoh: Pomade A">
+            </label>
+            <label>Kode produk
+              <input id="productCode" placeholder="Contoh: POM_A" maxlength="50">
+            </label>
+          </div>
+          <div class="form-grid">
+            <label>Harga modal
+              <input id="productCost" type="number" min="0" step="100" value="0" required>
+            </label>
+            <label>Harga jual
+              <input id="productSell" type="number" min="0" step="100" value="0" required>
+            </label>
+          </div>
+          <label>Stok awal
+            <input id="productStock" type="number" min="0" step="1" value="0" required>
+          </label>
+          <div class="form-grid">
+            <button id="productSaveBtn" class="primary" type="submit">Tambah Produk</button>
+            <button id="productCancelBtn" class="ghost" type="button" hidden>Batal Edit</button>
+          </div>
+          <p id="productMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Daftar Produk</h2>
+        <div id="productList" class="muted">Memuat...</div>
       </div>
     </section>
 
