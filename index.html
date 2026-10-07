@@ -41,6 +41,7 @@
       <button data-page="products" type="button" id="productsNav">Produk</button>
       <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
       <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
+      <button data-page="barber-report" type="button" id="barberReportNav">Laporan Omzet</button>
     </nav>
 
     <section id="page-dashboard" class="page">
@@ -328,6 +329,51 @@
     </section>
   </section>
 </main>
+
+
+    <section id="page-barber-report" class="page" hidden>
+      <div class="page-heading">
+        <div>
+          <h1>Laporan Omzet Barber</h1>
+          <p class="muted">Lihat total omzet jasa per barber berdasarkan hari, minggu, bulan, atau tahun.</p>
+        </div>
+        <button id="refreshBarberReportBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Filter Laporan</h2>
+        <div class="form-grid">
+          <label>Periode
+            <select id="barberReportPeriod">
+              <option value="day">Hari</option>
+              <option value="week">Minggu</option>
+              <option value="month">Bulan</option>
+              <option value="year">Tahun</option>
+            </select>
+          </label>
+          <label>Tanggal acuan
+            <input id="barberReportDate" type="date" required>
+          </label>
+        </div>
+        <label>Barber
+          <select id="barberReportBarber">
+            <option value="">Semua Barber</option>
+          </select>
+        </label>
+        <p id="barberReportRange" class="muted"></p>
+        <p id="barberReportMessage" class="message"></p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>Total Omzet Jasa</span><b id="barberReportTotal">Rp0</b></div>
+        <div class="stat"><span>Total Transaksi</span><b id="barberReportCount">0</b></div>
+      </div>
+
+      <div class="card">
+        <h2>Omzet per Barber</h2>
+        <div id="barberReportList" class="muted">Memuat...</div>
+      </div>
+    </section>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

@@ -17,3 +17,5 @@ PWA sederhana untuk manajemen Ruang Cukur berbasis Supabase.
 Mulai 1 Oktober 2026: Rp2.200.000 + 20% dari omzet jasa di atas Rp10.000.000, bonus pool dibagi kepada barber aktif.
 
 Aturan payroll disimpan di Supabase, bukan ditanam permanen di JavaScript.
+
+- Laporan Omzet Barber: filter hari, minggu, bulan, tahun, dan barber.

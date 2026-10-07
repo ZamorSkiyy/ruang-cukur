@@ -52,6 +52,16 @@ const expenseCategory = $("expenseCategory");
 const expenseDescription = $("expenseDescription");
 const expenseAmount = $("expenseAmount");
 const expensePayment = $("expensePayment");
+const barberReportNav = $("barberReportNav");
+const barberReportPeriod = $("barberReportPeriod");
+const barberReportDate = $("barberReportDate");
+const barberReportBarber = $("barberReportBarber");
+const barberReportRange = $("barberReportRange");
+const barberReportMessage = $("barberReportMessage");
+const barberReportTotal = $("barberReportTotal");
+const barberReportCount = $("barberReportCount");
+const barberReportList = $("barberReportList");
+const refreshBarberReportBtn = $("refreshBarberReportBtn");
 const saleProductSelect = $("saleProductSelect");
 const saleQuantity = $("saleQuantity");
 const salePaymentSelect = $("salePaymentSelect");
@@ -100,9 +110,10 @@ function showPage(page) {
   if (page === "products") loadProducts();
   if (page === "product-sales") { loadProductsForSale(); loadProductSales(); }
   if (page === "expenses") loadExpenses();
+  if (page === "barber-report") { populateBarberReportBarbers(); loadBarberReport(); }
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
-  if (["payrollSettingsNav", "barbersNav"].includes(button.id) && !isAdmin()) return;
+  if (["payrollSettingsNav", "barbersNav", "barberReportNav"].includes(button.id) && !isAdmin()) return;
   showPage(button.dataset.page);
 }));
 
@@ -134,6 +145,7 @@ async function loadProfile() {
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
+  barberReportNav.hidden = !isAdmin();
   productsNav.hidden = false;
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
@@ -813,6 +825,172 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
     setMessage(settingsMessage, "Aturan baru berhasil disimpan."); $("payrollSettingsForm").reset(); toggleSettingFields(); await loadPayrollSettings();
   } catch (error) { console.error(error); setMessage(settingsMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true); }
 });
+
+
+// ======================================================
+// LAPORAN OMZET BARBER
+// ======================================================
+function localDateValue(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDate(value) {
+  const [y, m, d] = String(value || "").split("-").map(Number);
+  if (!y || !m || !d) return new Date();
+  return new Date(y, m - 1, d);
+}
+
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+}
+
+function getReportRange(period, dateValue) {
+  const selected = parseLocalDate(dateValue);
+  let start;
+  let end;
+
+  if (period === "day") {
+    start = startOfLocalDay(selected);
+    end = endOfLocalDay(selected);
+  } else if (period === "week") {
+    // Senin = awal minggu, Minggu = akhir minggu.
+    const day = selected.getDay(); // Minggu=0 ... Sabtu=6
+    const daysFromMonday = day === 0 ? 6 : day - 1;
+    start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() - daysFromMonday);
+    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+  } else if (period === "month") {
+    start = new Date(selected.getFullYear(), selected.getMonth(), 1);
+    end = new Date(selected.getFullYear(), selected.getMonth() + 1, 1);
+  } else {
+    start = new Date(selected.getFullYear(), 0, 1);
+    end = new Date(selected.getFullYear() + 1, 0, 1);
+  }
+
+  return { start, end };
+}
+
+function formatReportDate(date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatReportRange(period, range) {
+  if (period === "day") {
+    return formatReportDate(range.start);
+  }
+  if (period === "week") {
+    const lastDay = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate() - 1);
+    return `${formatReportDate(range.start)} – ${formatReportDate(lastDay)}`;
+  }
+  if (period === "month") {
+    return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(range.start);
+  }
+  return String(range.start.getFullYear());
+}
+
+function populateBarberReportBarbers() {
+  if (!barberReportBarber) return;
+  const previous = barberReportBarber.value;
+  barberReportBarber.innerHTML =
+    `<option value="">Semua Barber</option>` +
+    barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+
+  if (previous && barbers.some(b => b.id === previous)) {
+    barberReportBarber.value = previous;
+  }
+}
+
+async function loadBarberReport() {
+  if (!isAdmin()) return;
+  if (!barberReportDate.value) barberReportDate.value = localDateValue();
+
+  setMessage(barberReportMessage, "Memuat laporan...");
+  barberReportList.innerHTML = "Memuat...";
+  try {
+    const period = barberReportPeriod.value || "month";
+    const range = getReportRange(period, barberReportDate.value);
+    const selectedBarberId = barberReportBarber.value || "";
+
+    const transactions = await getTransactions();
+    const filtered = transactions.filter(t => {
+      const d = new Date(t.transaction_date);
+      const inRange = d >= range.start && d < range.end;
+      const barberMatch = !selectedBarberId || t.barber_id === selectedBarberId;
+      return inRange && barberMatch;
+    });
+
+    const grouped = new Map();
+    barbers.forEach(b => grouped.set(b.id, {
+      id: b.id,
+      name: b.name || b.email || "Barber",
+      count: 0,
+      omzet: 0
+    }));
+
+    filtered.forEach(t => {
+      if (!grouped.has(t.barber_id)) {
+        grouped.set(t.barber_id, {
+          id: t.barber_id,
+          name: "Barber",
+          count: 0,
+          omzet: 0
+        });
+      }
+      const item = grouped.get(t.barber_id);
+      item.count += 1;
+      item.omzet += Number(t.price_snapshot || 0);
+    });
+
+    const rows = [...grouped.values()]
+      .filter(row => !selectedBarberId || row.id === selectedBarberId)
+      .sort((a, b) => b.omzet - a.omzet);
+
+    const total = filtered.reduce((sum, t) => sum + Number(t.price_snapshot || 0), 0);
+
+    barberReportTotal.textContent = rupiah(total);
+    barberReportCount.textContent = filtered.length;
+    barberReportRange.textContent = `Periode: ${formatReportRange(period, range)}`;
+
+    barberReportList.innerHTML = rows.length
+      ? rows.map(row => `
+          <div class="list-row report-row">
+            <div>
+              <strong>${esc(row.name)}</strong>
+              <div class="muted">${row.count} transaksi</div>
+            </div>
+            <div class="right">
+              <strong>${rupiah(row.omzet)}</strong>
+            </div>
+          </div>
+        `).join("")
+      : `<p class="muted">Belum ada transaksi jasa pada periode ini.</p>`;
+
+    setMessage(barberReportMessage, "");
+  } catch (error) {
+    console.error(error);
+    barberReportTotal.textContent = rupiah(0);
+    barberReportCount.textContent = "0";
+    barberReportList.innerHTML = `<p class="error">Gagal memuat laporan: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+    setMessage(barberReportMessage, "", true);
+  }
+}
+
+
+
+barberReportPeriod.addEventListener("change", loadBarberReport);
+barberReportDate.addEventListener("change", loadBarberReport);
+barberReportBarber.addEventListener("change", loadBarberReport);
+refreshBarberReportBtn.addEventListener("click", loadBarberReport);
 
 async function init() {
   try {

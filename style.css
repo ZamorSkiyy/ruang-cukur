@@ -408,3 +408,11 @@ select:focus {
   border-radius: 12px;
   background: #fafafa;
 }
+
+
+/* =========================
+   BARBER REPORT
+========================= */
+.report-row {
+  align-items: center;
+}
