@@ -2,388 +2,430 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
-
-  <meta
-    name="theme-color"
-    content="#171717"
-  >
-
-  <link
-    rel="manifest"
-    href="manifest.json"
-  >
-
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171717">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
   <title>Ruang Cukur</title>
 </head>
-
 <body>
-
 <main class="app">
-
-  <!-- =========================
-       LOGIN
-  ========================== -->
-
-  <section
-    id="loginView"
-    class="card login"
-  >
-
-    <div class="brand">
-      RUANG <span>CUKUR</span>
-    </div>
-
-    <p class="muted">
-      Sistem manajemen barbershop
-    </p>
-
+  <section id="loginView" class="card login">
+    <div class="brand">RUANG <span>CUKUR</span></div>
+    <p class="muted">Sistem manajemen barbershop</p>
     <h1>Masuk</h1>
-
     <form id="loginForm">
-
-      <label>
-        Email
-
-        <input
-          id="email"
-          type="email"
-          autocomplete="email"
-          required
-        >
-      </label>
-
-      <label>
-        Password
-
-        <input
-          id="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        >
-      </label>
-
-      <button
-        class="primary"
-        type="submit"
-      >
-        Masuk
-      </button>
-
-      <p
-        id="loginError"
-        class="error"
-      ></p>
-
+      <label>Email<input id="email" type="email" autocomplete="email" required></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Masuk</button>
+      <p id="loginError" class="error"></p>
     </form>
-
   </section>
 
-
-  <!-- =========================
-       APLIKASI
-  ========================== -->
-
-  <section
-    id="appView"
-    hidden
-  >
-
-    <!-- HEADER -->
-
+  <section id="appView" hidden>
     <header class="top">
-
       <div>
-
-        <div class="brand small">
-          RUANG <span>CUKUR</span>
-        </div>
-
-        <div
-          id="userLabel"
-          class="muted"
-        ></div>
-
+        <div class="brand small">RUANG <span>CUKUR</span></div>
+        <div id="userLabel" class="muted"></div>
       </div>
-
-      <button
-        id="logoutBtn"
-        class="ghost"
-        type="button"
-      >
-        Keluar
-      </button>
-
+      <button id="logoutBtn" class="ghost" type="button">Keluar</button>
     </header>
 
-
-    <!-- NAVIGASI -->
-
-    <nav
-      id="nav"
-      class="nav"
-    >
-
-      <button
-        data-page="dashboard"
-        class="active"
-        type="button"
-      >
-        Dashboard
-      </button>
-
-      <button
-        data-page="transactions"
-        type="button"
-      >
-        Transaksi
-      </button>
-
-      <button
-  id="servicesNav"
-  data-page="services"
-  type="button"
-  onclick="showPage('services')"
->
-  Layanan
-</button>
-
+    <nav id="nav" class="nav">
+      <button data-page="dashboard" class="active" type="button">Dashboard</button>
+      <button data-page="transactions" type="button">Transaksi</button>
+      <button data-page="services" type="button">Layanan</button>
+      <button data-page="payroll" type="button">Payroll</button>
+      <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
+      <button data-page="barbers" type="button" id="barbersNav">Barber</button>
+      <button data-page="products" type="button" id="productsNav">Produk</button>
+      <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
+      <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
+      <button data-page="barber-report" type="button" id="barberReportNav">Laporan Omzet</button>
+      <button data-page="finance-report" type="button" id="financeReportNav">Laporan Keuangan</button>
     </nav>
 
-
-    <!-- =========================
-         DASHBOARD
-    ========================== -->
-
-    <section
-      id="page-dashboard"
-      class="page"
-    >
-
+    <section id="page-dashboard" class="page">
       <h1>Dashboard</h1>
-
-      <p class="muted">
-        Ringkasan hari ini
-      </p>
-
-
+      <p class="muted">Ringkasan hari ini</p>
       <div class="stats">
-
-        <div class="stat">
-          <span>Omzet</span>
-
-          <b id="statOmzet">
-            Rp0
-          </b>
-        </div>
-
-
-        <div class="stat">
-          <span>Bagian Barber</span>
-
-          <b id="statBarber">
-            Rp0
-          </b>
-        </div>
-
-
-        <div class="stat">
-          <span>Bagian Owner</span>
-
-          <b id="statOwner">
-            Rp0
-          </b>
-        </div>
-
-
-        <div class="stat">
-          <span>Transaksi</span>
-
-          <b id="statCount">
-            0
-          </b>
-        </div>
-
+        <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
+        <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
+        <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
+        <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
       </div>
-
-
       <div class="card">
-
-        <h2>
-          Transaksi terbaru
-        </h2>
-
-        <div
-          id="recent"
-          class="muted"
-        >
-          Memuat...
-        </div>
-
+        <h2>Transaksi terbaru</h2>
+        <div id="recent" class="muted">Memuat...</div>
       </div>
-
     </section>
 
-
-    <!-- =========================
-         TRANSAKSI
-    ========================== -->
-
-    <section
-      id="page-transactions"
-      class="page"
-      hidden
-    >
-
+    <section id="page-transactions" class="page" hidden>
       <h1>Transaksi</h1>
-
-      <p class="muted">
-        Input transaksi baru
-      </p>
-
-
-      <form
-        id="transactionForm"
-        class="card"
-      >
-
-        <label>
-          Barber
-
-          <select
-            id="barberSelect"
-            required
-          ></select>
-
-        </label>
-
-
-        <label>
-          Layanan
-
-          <select
-            id="serviceSelect"
-            required
-          ></select>
-
-        </label>
-
-
-        <label>
-          Pembayaran
-
-          <select
-            id="paymentSelect"
-            required
-          >
-
-            <option value="cash">
-              Cash
-            </option>
-
-            <option value="qris">
-              QRIS
-            </option>
-
-            <option value="transfer">
-              Transfer
-            </option>
-
-          </select>
-
-        </label>
-
-
-        <button
-          class="primary"
-          type="submit"
-        >
-          Simpan Transaksi
-        </button>
-
-
-        <p
-          id="transactionMessage"
-          class="message"
-        ></p>
-
+      <p class="muted">Input transaksi layanan</p>
+      <form id="transactionForm" class="card">
+        <label>Barber<select id="barberSelect" required></select></label>
+        <label>Layanan<select id="serviceSelect" required></select></label>
+        <label>Pembayaran<select id="paymentSelect" required>
+          <option value="cash">Cash</option>
+          <option value="qris">QRIS</option>
+          <option value="transfer">Transfer</option>
+        </select></label>
+        <button class="primary" type="submit">Simpan Transaksi</button>
+        <p id="transactionMessage" class="message"></p>
       </form>
+      <div class="card">
+        <h2>Riwayat</h2>
+        <div id="transactionList" class="muted">Memuat...</div>
+      </div>
+    </section>
 
+    <section id="page-services" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Layanan</h1><p class="muted">Harga layanan Ruang Cukur</p></div>
+      </div>
+
+      <div class="card" id="serviceManagerCard">
+        <h2 id="serviceFormTitle">Tambah Layanan</h2>
+        <form id="serviceForm">
+          <div class="form-grid">
+            <label>Nama layanan
+              <input id="serviceName" required placeholder="Contoh: Cukur + Keramas">
+            </label>
+            <label>Kode layanan
+              <input id="serviceCode" required placeholder="Contoh: CUKUR_B" maxlength="50">
+            </label>
+          </div>
+          <label>Harga
+            <input id="servicePrice" type="number" min="0" step="1000" required placeholder="35000">
+          </label>
+          <div class="form-grid">
+            <button id="serviceSaveBtn" class="primary" type="submit">Tambah Layanan</button>
+            <button id="serviceCancelBtn" class="ghost" type="button" hidden>Batal Edit</button>
+          </div>
+          <p id="serviceMessage" class="message"></p>
+        </form>
+      </div>
 
       <div class="card">
+        <h2>Daftar Layanan Aktif</h2>
+        <div id="serviceList" class="muted">Memuat...</div>
+      </div>
+    </section>
 
-        <h2>
-          Riwayat
-        </h2>
+    <section id="page-payroll" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Payroll</h1><p class="muted">Gaji dan bonus barber per bulan</p></div>
+        <button id="refreshPayrollBtn" class="ghost" type="button">Refresh</button>
+      </div>
 
-        <div
-          id="transactionList"
-          class="muted"
-        >
-          Memuat...
+      <div class="card">
+        <div class="form-grid">
+          <label>Periode<select id="payrollPeriodSelect"></select></label>
+          <div class="field-action"><button id="generatePayrollBtn" class="primary" type="button">Generate / Cek Payroll</button></div>
         </div>
-
+        <p id="payrollMessage" class="message"></p>
       </div>
 
+      <div id="payrollSummary" class="stats"></div>
+      <div class="card"><h2>Detail Payroll</h2><div id="payrollList" class="muted">Pilih periode.</div></div>
     </section>
 
+    <section id="page-payroll-settings" class="page" hidden>
+      <h1>Aturan Payroll</h1>
+      <p class="muted">Aturan disimpan berdasarkan periode. Payroll yang sudah dibuat tetap menyimpan snapshot aturan.</p>
 
-    <!-- =========================
-         LAYANAN
-    ========================== -->
-
-    <section
-      id="page-services"
-      class="page"
-      hidden
-    >
-
-      <h1>Layanan</h1>
-
-      <p class="muted">
-        Harga layanan Ruang Cukur
-      </p>
-
-
-      <div
-        class="card"
-        id="serviceList"
-      >
-        Memuat...
+      <div class="card">
+        <h2>Buat aturan baru</h2>
+        <form id="payrollSettingsForm">
+          <div class="form-grid">
+            <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
+            <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
+          </div>
+          <label>Metode<select id="settingMethod" required>
+            <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
+            <option value="profit_share_50_50">Bagi Hasil</option>
+          </select></label>
+          <div id="bonusFields" class="form-grid">
+            <label>Gaji pokok<input id="settingBaseSalary" type="number" min="0" step="1000" value="2200000"></label>
+            <label>Batas omzet bonus<input id="settingThreshold" type="number" min="0" step="1000" value="10000000"></label>
+            <label>Bonus (%)<input id="settingBonusRate" type="number" min="0" max="100" step="0.1" value="20"></label>
+          </div>
+          <div id="shareFields" class="form-grid" hidden>
+            <label>Bagian barber (%)<input id="settingBarberRate" type="number" min="0" max="100" step="0.1" value="50"></label>
+            <label>Bagian owner (%)<input id="settingOwnerRate" type="number" min="0" max="100" step="0.1" value="50"></label>
+          </div>
+          <label>Catatan<textarea id="settingNotes" rows="3" placeholder="Catatan perubahan aturan"></textarea></label>
+          <button class="primary" type="submit">Simpan Aturan Baru</button>
+          <p id="settingsMessage" class="message"></p>
+        </form>
       </div>
 
+      <div class="card">
+        <h2>Riwayat Aturan</h2>
+        <div id="settingsList" class="muted">Memuat...</div>
+      </div>
     </section>
 
+    <section id="page-products" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Produk</h1><p class="muted">Master produk dan harga jual.</p></div>
+        <button id="refreshProductsBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card" id="productManagerCard">
+        <h2 id="productFormTitle">Tambah Produk</h2>
+        <form id="productForm">
+          <div class="form-grid">
+            <label>Nama produk
+              <input id="productName" required placeholder="Contoh: Pomade A">
+            </label>
+            <label>Kode produk
+              <input id="productCode" placeholder="Contoh: POM_A" maxlength="50">
+            </label>
+          </div>
+          <div class="form-grid">
+            <label>Harga modal
+              <input id="productCost" type="number" min="0" step="100" value="0" required>
+            </label>
+            <label>Harga jual
+              <input id="productSell" type="number" min="0" step="100" value="0" required>
+            </label>
+          </div>
+          <label>Stok awal
+            <input id="productStock" type="number" min="0" step="1" value="0" required>
+          </label>
+          <div class="form-grid">
+            <button id="productSaveBtn" class="primary" type="submit">Tambah Produk</button>
+            <button id="productCancelBtn" class="ghost" type="button" hidden>Batal Edit</button>
+          </div>
+          <p id="productMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Daftar Produk</h2>
+        <div id="productList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-product-sales" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Penjualan Produk</h1><p class="muted">Catat penjualan produk dan stok akan berkurang otomatis.</p></div>
+        <button id="refreshProductSalesBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Catat Penjualan</h2>
+        <form id="productSaleForm">
+          <label>Produk
+            <select id="saleProductSelect" required></select>
+          </label>
+          <div class="form-grid">
+            <label>Jumlah
+              <input id="saleQuantity" type="number" min="1" step="1" value="1" required>
+            </label>
+            <label>Pembayaran
+              <select id="salePaymentSelect" required>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <div id="salePreview" class="sale-preview muted">Pilih produk.</div>
+          <button class="primary" type="submit">Simpan Penjualan</button>
+          <p id="productSaleMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Riwayat Penjualan</h2>
+        <div id="productSalesList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-expenses" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Pengeluaran</h1><p class="muted">Catat biaya operasional Ruang Cukur.</p></div>
+        <button id="refreshExpensesBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card">
+        <h2>Catat Pengeluaran</h2>
+        <form id="expenseForm">
+          <div class="form-grid">
+            <label>Tanggal
+              <input id="expenseDate" type="date" required>
+            </label>
+            <label>Kategori
+              <select id="expenseCategory" required>
+                <option value="Operasional">Operasional</option>
+                <option value="Listrik">Listrik</option>
+                <option value="Air">Air</option>
+                <option value="Internet">Internet</option>
+                <option value="Perlengkapan Barber">Perlengkapan Barber</option>
+                <option value="Produk / Stok">Produk / Stok</option>
+                <option value="Kebersihan">Kebersihan</option>
+                <option value="Perbaikan">Perbaikan</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </label>
+          </div>
+          <label>Keterangan
+            <input id="expenseDescription" required placeholder="Contoh: Bayar listrik bulan Oktober">
+          </label>
+          <div class="form-grid">
+            <label>Nominal
+              <input id="expenseAmount" type="number" min="0" step="100" required placeholder="350000">
+            </label>
+            <label>Pembayaran
+              <select id="expensePayment" required>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <button class="primary" type="submit">Simpan Pengeluaran</button>
+          <p id="expenseMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Riwayat Pengeluaran</h2>
+        <div id="expenseList" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+    <section id="page-barbers" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Manajemen Barber</h1><p class="muted">Tambah, aktifkan, atau nonaktifkan akun barber.</p></div>
+        <button id="refreshBarbersBtn" class="ghost" type="button">Refresh</button>
+      </div>
+
+      <div class="card" id="barberManagerCard">
+        <h2>Tambah Barber</h2>
+        <form id="barberForm">
+          <div class="form-grid">
+            <label>Nama barber
+              <input id="barberName" required placeholder="Contoh: Adit">
+            </label>
+            <label>Email login
+              <input id="barberEmail" type="email" autocomplete="off" required placeholder="barber@email.com">
+            </label>
+          </div>
+          <label>Password login
+            <input id="barberPassword" type="password" minlength="6" autocomplete="new-password" required placeholder="Minimal 6 karakter">
+          </label>
+          <button class="primary" type="submit">Tambah Barber</button>
+          <p id="barberMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Daftar Barber</h2>
+        <div id="barberManagerList" class="muted">Memuat...</div>
+      </div>
+    </section>
   </section>
-
 </main>
 
 
-<!-- SUPABASE -->
+    <section id="page-barber-report" class="page" hidden>
+      <div class="page-heading">
+        <div>
+          <h1>Laporan Omzet Barber</h1>
+          <p class="muted">Lihat total omzet jasa per barber berdasarkan hari, minggu, bulan, atau tahun.</p>
+        </div>
+        <button id="refreshBarberReportBtn" class="ghost" type="button">Refresh</button>
+      </div>
 
-<script
-  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
-></script>
+      <div class="card">
+        <h2>Filter Laporan</h2>
+        <div class="form-grid">
+          <label>Periode
+            <select id="barberReportPeriod">
+              <option value="day">Hari</option>
+              <option value="week">Minggu</option>
+              <option value="month">Bulan</option>
+              <option value="year">Tahun</option>
+            </select>
+          </label>
+          <label>Tanggal acuan
+            <input id="barberReportDate" type="date" required>
+          </label>
+        </div>
+        <label>Barber
+          <select id="barberReportBarber">
+            <option value="">Semua Barber</option>
+          </select>
+        </label>
+        <p id="barberReportRange" class="muted"></p>
+        <p id="barberReportMessage" class="message"></p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>Total Omzet Jasa</span><b id="barberReportTotal">Rp0</b></div>
+        <div class="stat"><span>Total Transaksi</span><b id="barberReportCount">0</b></div>
+      </div>
+
+      <div class="card">
+        <h2>Omzet per Barber</h2>
+        <div id="barberReportList" class="muted">Memuat...</div>
+      </div>
+    </section>
 
 
-<!-- CONFIG -->
+    <section id="page-finance-report" class="page" hidden>
+      <div class="page-heading">
+        <div>
+          <h1>Laporan Keuangan</h1>
+          <p class="muted">Ringkasan pemasukan, pengeluaran, dan laba operasional. Payroll barber belum dikurangkan di tahap ini.</p>
+        </div>
+        <button id="refreshFinanceReportBtn" class="ghost" type="button">Refresh</button>
+      </div>
 
+      <div class="card">
+        <h2>Filter Laporan</h2>
+        <div class="form-grid">
+          <label>Periode
+            <select id="financeReportPeriod">
+              <option value="day">Hari</option>
+              <option value="week">Minggu</option>
+              <option value="month">Bulan</option>
+              <option value="year">Tahun</option>
+            </select>
+          </label>
+          <label>Tanggal acuan
+            <input id="financeReportDate" type="date" required>
+          </label>
+        </div>
+        <p id="financeReportRange" class="muted"></p>
+        <p id="financeReportMessage" class="message"></p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>Omzet Jasa</span><b id="financeServiceTotal">Rp0</b></div>
+        <div class="stat"><span>Penjualan Produk</span><b id="financeProductTotal">Rp0</b></div>
+        <div class="stat"><span>Total Pemasukan</span><b id="financeIncomeTotal">Rp0</b></div>
+        <div class="stat"><span>Total Pengeluaran</span><b id="financeExpenseTotal">Rp0</b></div>
+        <div class="stat"><span>Laba Operasional</span><b id="financeProfitTotal">Rp0</b></div>
+      </div>
+
+      <div class="card">
+        <h2>Rincian</h2>
+        <div id="financeBreakdown" class="muted">Memuat...</div>
+      </div>
+
+      <div class="card">
+        <h2>Pengeluaran per Kategori</h2>
+        <div id="financeExpenseCategories" class="muted">Memuat...</div>
+      </div>
+    </section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
-
-
-<!-- APP -->
-
 <script src="app.js"></script>
-
 </body>
 </html>

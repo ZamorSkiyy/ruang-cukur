@@ -1,15 +1,21 @@
-# Ruang Cukur App v0.1
+# Ruang Cukur
 
-Prototype PWA untuk Ruang Cukur Barbershop.
+PWA sederhana untuk manajemen Ruang Cukur berbasis Supabase.
 
-## Fitur
-- Dashboard omzet/transaksi.
-- 6 layanan sesuai harga awal.
-- Perhitungan bagi hasil 50:50.
-- Metode Cash, QRIS, Transfer.
-- Riwayat transaksi.
-- Penyimpanan demo menggunakan localStorage.
-- PWA Service Worker.
+## Versi ini
+- Login Supabase
+- Dashboard omzet/transaksi harian
+- Input transaksi layanan
+- Daftar layanan aktif
+- Payroll bulanan
+- Dua metode payroll: 50:50 dan Gaji + Bonus Omzet
+- Pengaturan payroll yang dapat dibuat berdasarkan periode
+- Snapshot payroll tersimpan di database
+- Role mengikuti database: `owner`, `admin`, `barber`
 
-## Catatan
-Versi ini belum memakai database online dan login sungguhan. Tahap berikutnya adalah mengganti localStorage dengan database + autentikasi dan membuat role Owner/Admin/Barber.
+## Aturan payroll aktif
+Mulai 1 Oktober 2026: Rp2.200.000 + 20% dari omzet jasa di atas Rp10.000.000, bonus pool dibagi kepada barber aktif.
+
+Aturan payroll disimpan di Supabase, bukan ditanam permanen di JavaScript.
+
+- Laporan Omzet Barber: filter hari, minggu, bulan, tahun, dan barber.
