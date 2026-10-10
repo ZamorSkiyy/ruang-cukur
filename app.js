@@ -152,7 +152,7 @@ if (menuToggle && nav) {
   });
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
-  if (["payrollSettingsNav", "barbersNav", "barberReportNav", "financeReportNav", "attendanceNav"].includes(button.id) && !isAdmin()) return;
+  if (["payrollSettingsNav", "barbersNav", "barberReportNav", "financeReportNav"].includes(button.id) && !isAdmin()) return;
   showPage(button.dataset.page);
 }));
 
@@ -887,26 +887,49 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
 // ABSENSI BARBER MANUAL
 // ======================================================
 async function initAttendance() {
-  if (!isAdmin()) return;
-  if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
-  attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+  if (!currentProfile) return;
+  const isBarber = currentProfile.role === "barber";
+  const ownName = currentProfile.full_name || currentProfile.name || currentUser.email || "Akun barber";
+  if (isBarber) {
+    attendanceDate.value = todayLocalISO();
+    attendanceDate.max = todayLocalISO();
+    attendanceDate.min = todayLocalISO();
+    attendanceBarber.innerHTML = `<option value="${currentUser.id}">${esc(ownName)}</option>`;
+    attendanceBarber.value = currentUser.id;
+    attendanceBarber.closest("label").hidden = true;
+    attendancePresent.closest("label").hidden = true;
+    attendancePresent.value = "true";
+    if (attendanceNotes) attendanceNotes.placeholder = "Catatan opsional";
+    const submitBtn = document.querySelector('#attendanceForm button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = "Absen Hadir Hari Ini";
+  } else if (isAdmin()) {
+    if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
+    attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
+    attendanceBarber.closest("label").hidden = false;
+    attendancePresent.closest("label").hidden = false;
+    attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+  }
 }
 async function loadAttendance() {
-  if (!isAdmin() || !attendanceDate.value) return;
+  if ((!isAdmin() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
   attendanceList.textContent = "Memuat...";
   try {
-    const { data, error } = await supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value).order("created_at");
+    let query = supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value);
+    if (!isAdmin()) query = query.eq("barber_id", currentUser.id);
+    const { data, error } = await query.order("created_at");
     if (error) throw error;
     const rows = data || [];
-    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); return `<div class="list-row"><div><strong>${esc(b?.name || b?.email || "Barber")}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div><button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button></div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
+    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = isAdmin() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
   } catch (error) { attendanceList.innerHTML = `<p class="error">Gagal memuat absensi: ${esc(error.message)}</p>`; }
 }
 attendanceDate?.addEventListener("change", loadAttendance);
 $("refreshAttendanceBtn")?.addEventListener("click", loadAttendance);
 $("attendanceForm")?.addEventListener("submit", async event => {
-  event.preventDefault(); if (!isAdmin()) return;
+  event.preventDefault(); if (!isAdmin() && currentProfile?.role !== "barber") return;
   try {
-    const payload = { barber_id: attendanceBarber.value, attendance_date: attendanceDate.value, present: attendancePresent.value === "true", notes: attendanceNotes.value.trim() || null, recorded_by: currentUser.id };
+    const isBarber = currentProfile.role === "barber";
+    if (isBarber && attendanceDate.value !== todayLocalISO()) throw new Error("Barber hanya dapat absen untuk tanggal hari ini.");
+    const payload = { barber_id: isBarber ? currentUser.id : attendanceBarber.value, attendance_date: attendanceDate.value, present: isBarber ? true : attendancePresent.value === "true", notes: attendanceNotes.value.trim() || null, recorded_by: currentUser.id };
     const { error } = await supabaseClient.from("barber_attendance").upsert(payload, { onConflict: "barber_id,attendance_date" });
     if (error) throw error;
     setMessage(attendanceMessage, "Absensi berhasil disimpan."); attendanceNotes.value = ""; await loadAttendance();
