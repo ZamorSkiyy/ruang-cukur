@@ -564,3 +564,25 @@ input:focus, select:focus { border-color: #8c877e; outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+
+/* Navigasi vertikal di layar ponsel: semua menu tersusun ke bawah */
+@media (max-width: 600px) {
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+    padding: 0;
+    width: 100%;
+  }
+  .nav button {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    white-space: normal;
+    padding: 13px 16px;
+    border-radius: 13px;
+  }
+}
