@@ -11,6 +11,10 @@ const loginForm = $("loginForm");
 const loginError = $("loginError");
 const userLabel = $("userLabel");
 const logoutBtn = $("logoutBtn");
+const menuToggle = $("menuToggle");
+const menuToggleLabel = $("menuToggleLabel");
+const currentPageLabel = $("currentPageLabel");
+const nav = $("nav");
 const navButtons = document.querySelectorAll("[data-page]");
 const statOmzet = $("statOmzet");
 const statBarber = $("statBarber");
@@ -121,6 +125,12 @@ function showPage(page) {
   const target = $(`page-${page}`);
   if (target) target.hidden = false;
   navButtons.forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  const activeButton = [...navButtons].find(b => b.dataset.page === page);
+  if (currentPageLabel && activeButton) currentPageLabel.textContent = activeButton.textContent.trim();
+  if (menuToggleLabel) menuToggleLabel.textContent = "Menu";
+  if (menuToggle) menuToggle.setAttribute("aria-expanded", "false");
+  if (nav) nav.hidden = true;
+  window.scrollTo({ top: 0, behavior: "auto" });
   if (page === "dashboard") loadDashboard();
   if (page === "transactions") loadTransactions();
   if (page === "services") renderServices();
@@ -133,6 +143,13 @@ function showPage(page) {
   if (page === "expenses") loadExpenses();
   if (page === "barber-report") { populateBarberReportBarbers(); loadBarberReport(); }
   if (page === "finance-report") loadFinanceReport();
+}
+if (menuToggle && nav) {
+  menuToggle.addEventListener("click", () => {
+    const willOpen = nav.hidden;
+    nav.hidden = !willOpen;
+    menuToggle.setAttribute("aria-expanded", String(willOpen));
+  });
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
   if (["payrollSettingsNav", "barbersNav", "barberReportNav", "financeReportNav", "attendanceNav"].includes(button.id) && !isAdmin()) return;

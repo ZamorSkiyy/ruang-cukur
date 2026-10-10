@@ -566,23 +566,49 @@ input:focus, select:focus { border-color: #8c877e; outline: none; }
 }
 
 
-/* Navigasi vertikal di layar ponsel: semua menu tersusun ke bawah */
-@media (max-width: 600px) {
-  .nav {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow: visible;
-    padding: 0;
-    width: 100%;
-  }
-  .nav button {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    text-align: left;
-    white-space: normal;
-    padding: 13px 16px;
-    border-radius: 13px;
-  }
+/* Menu dropdown + halaman terpisah, nyaman untuk layar HP */
+.nav-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 22px;
 }
+.menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 11px 17px;
+  border: 1px solid var(--line, #e4e0d9);
+  border-radius: 14px;
+  background: var(--ink, #191919);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.menu-toggle span:first-child { font-size: 18px; line-height: 1; }
+.current-page-label { color: var(--muted, #777); font-size: 13px; font-weight: 650; text-align: right; }
+.nav[hidden] { display: none !important; }
+.nav:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 22px;
+  padding: 10px;
+  overflow: visible;
+  border: 1px solid var(--line, #e4e0d9);
+  border-radius: 16px;
+  background: #fff;
+}
+.nav:not([hidden]) button {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  border-radius: 11px;
+  padding: 12px 14px;
+}
+.page[hidden] { display: none !important; }

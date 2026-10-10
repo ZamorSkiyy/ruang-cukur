@@ -31,7 +31,13 @@
       <button id="logoutBtn" class="ghost" type="button">Keluar</button>
     </header>
 
-    <nav id="nav" class="nav">
+    <div class="nav-toolbar">
+      <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav">
+        <span aria-hidden="true">☰</span> <span id="menuToggleLabel">Menu</span>
+      </button>
+      <span id="currentPageLabel" class="current-page-label">Dashboard</span>
+    </div>
+    <nav id="nav" class="nav" hidden>
       <button data-page="dashboard" class="active" type="button">Dashboard</button>
       <button data-page="transactions" type="button">Transaksi</button>
       <button data-page="services" type="button">Layanan</button>
