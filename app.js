@@ -752,30 +752,15 @@ productCancelBtn.addEventListener("click", resetProductForm);
 $("refreshProductsBtn").addEventListener("click", loadProducts);
 
 function renderBarberSelect() {
-  // Barber hanya boleh mencatat transaksi atas namanya sendiri.
-  // Owner/admin tetap dapat memilih barber mana pun yang aktif.
-  if (currentProfile?.role === "barber") {
-    const ownBarber = barbers.find(b => b.id === currentProfile.id);
-    const ownName = ownBarber?.name || currentProfile.full_name || currentProfile.name || ownBarber?.email || currentUser?.email || "Akun barber";
-    barberSelect.innerHTML = `<option value="${esc(currentProfile.id)}">${esc(ownName)}</option>`;
-    barberSelect.value = currentProfile.id;
-    barberSelect.disabled = true;
-    barberSelect.setAttribute("aria-label", "Barber yang login");
-    return;
-  }
-  barberSelect.disabled = false;
-  barberSelect.removeAttribute("aria-label");
   barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
 }
 
 transactionForm.addEventListener("submit", async event => {
   event.preventDefault(); setMessage(transactionMessage, "Menyimpan transaksi...");
   try {
-    if (!currentUser || !currentProfile) throw new Error("Sesi login belum siap. Silakan muat ulang halaman.");
-    const barberId = currentProfile.role === "barber" ? currentProfile.id : barberSelect.value;
-    if (!barberId) throw new Error("Pilih barber terlebih dahulu.");
+    if (!barberSelect.value) throw new Error("Pilih barber terlebih dahulu.");
     if (!serviceSelect.value) throw new Error("Pilih layanan terlebih dahulu.");
-    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberId, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
+    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
     if (error) throw error;
     setMessage(transactionMessage, "Transaksi berhasil disimpan.");
     await loadTransactions(); await loadDashboard();
@@ -854,11 +839,53 @@ async function loadPayrollSettings() {
   if (!isAdmin()) return;
   settingsList.innerHTML = "Memuat...";
   try {
-    const { data, error } = await supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false });
-    if (error) throw error; payrollSettings = data || [];
-    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
+    const [{ data, error }, { data: barberData, error: barberError }] = await Promise.all([
+      supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false }),
+      supabaseClient.from("profiles").select("id,name,email").eq("role", "barber").order("name")
+    ]);
+    if (error) throw error; if (barberError) throw barberError;
+    payrollSettings = data || [];
+    const barberSelect = $("settingBarberId");
+    if (barberSelect) {
+      const oldValue = barberSelect.value;
+      barberSelect.innerHTML = `<option value="">Semua barber (aturan umum)</option>` + (barberData || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+      if ([...barberSelect.options].some(o => o.value === oldValue)) barberSelect.value = oldValue;
+    }
+    const names = Object.fromEntries((barberData || []).map(b => [b.id, b.name || b.email || "Barber"]));
+    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => {
+      const methodText = s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`;
+      const isActive = s.status === "active";
+      return `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">Untuk: ${s.barber_id ? esc(names[s.barber_id] || "Barber tertentu") : "Semua barber (aturan umum)"}</div><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${methodText}</div></div><div class="right"><span class="badge">${esc(s.status)}</span><div class="settings-actions"><button type="button" class="ghost" data-setting-toggle="${s.id}" data-next-status="${isActive ? "inactive" : "active"}">${isActive ? "Nonaktifkan" : "Aktifkan"}</button> <button type="button" class="ghost" data-setting-delete="${s.id}">Hapus</button></div></div></div>`;
+    }).join("") : `<p class="muted">Belum ada aturan.</p>`;
   } catch (error) { settingsList.innerHTML = `<p class="error">Gagal memuat aturan: ${esc(error.message)}</p>`; }
 }
+
+settingsList.addEventListener("click", async event => {
+  if (!isAdmin()) return;
+  const toggle = event.target.closest("[data-setting-toggle]");
+  const remove = event.target.closest("[data-setting-delete]");
+  if (!toggle && !remove) return;
+  try {
+    if (toggle) {
+      const nextStatus = toggle.dataset.nextStatus;
+      if (!confirm(`${nextStatus === "inactive" ? "Nonaktifkan" : "Aktifkan kembali"} aturan ini?`)) return;
+      const { error } = await supabaseClient.from("payroll_settings").update({ status: nextStatus, updated_at: new Date().toISOString() }).eq("id", toggle.dataset.settingToggle);
+      if (error) throw error;
+      setMessage(settingsMessage, `Aturan berhasil ${nextStatus === "inactive" ? "dinonaktifkan" : "diaktifkan kembali"}.`);
+    } else {
+      const setting = payrollSettings.find(x => String(x.id) === String(remove.dataset.settingDelete));
+      if (!setting) throw new Error("Aturan tidak ditemukan.");
+      const { data: existingPayroll, error: payrollError } = await supabaseClient.from("payroll").select("id,period_month").gte("period_month", setting.effective_from).limit(1);
+      if (payrollError) throw payrollError;
+      if (existingPayroll?.length) throw new Error("Aturan tidak bisa dihapus karena sudah ada riwayat payroll pada/ setelah tanggal mulai. Nonaktifkan saja agar riwayat tetap aman.");
+      if (!confirm(`Hapus aturan '${setting.name}' secara permanen?`)) return;
+      const { error } = await supabaseClient.from("payroll_settings").delete().eq("id", setting.id);
+      if (error) throw error;
+      setMessage(settingsMessage, "Aturan berhasil dihapus.");
+    }
+    await loadPayrollSettings();
+  } catch (error) { setMessage(settingsMessage, `Gagal: ${error.message}`, true); }
+});
 
 function toggleSettingFields() {
   const method = $("settingMethod").value;
@@ -877,6 +904,7 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
     if (method === "profit_share_50_50" && Math.abs(barberRate + ownerRate - 1) > 0.00001) throw new Error("Bagian barber + owner harus 100%.");
     const payload = {
       name: $("settingName").value.trim(), method,
+      barber_id: $("settingBarberId").value || null,
       base_salary: method === "base_plus_turnover_bonus" ? Number($("settingBaseSalary").value || 0) : 0,
       turnover_threshold: method === "base_plus_turnover_bonus" ? Number($("settingThreshold").value || 0) : 0,
       bonus_rate: method === "base_plus_turnover_bonus" ? Number($("settingBonusRate").value || 0) / 100 : 0,
