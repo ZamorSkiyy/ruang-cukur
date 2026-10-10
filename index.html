@@ -31,11 +31,18 @@
       <button id="logoutBtn" class="ghost" type="button">Keluar</button>
     </header>
 
-    <nav id="nav" class="nav">
+    <div class="nav-toolbar">
+      <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="nav">
+        <span aria-hidden="true">☰</span> <span id="menuToggleLabel">Menu</span>
+      </button>
+      <span id="currentPageLabel" class="current-page-label">Dashboard</span>
+    </div>
+    <nav id="nav" class="nav" hidden>
       <button data-page="dashboard" class="active" type="button">Dashboard</button>
       <button data-page="transactions" type="button">Transaksi</button>
       <button data-page="services" type="button">Layanan</button>
       <button data-page="payroll" type="button">Payroll</button>
+      <button data-page="attendance" type="button" id="attendanceNav">Absensi Barber</button>
       <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
       <button data-page="barbers" type="button" id="barbersNav">Barber</button>
       <button data-page="products" type="button" id="productsNav">Produk</button>
@@ -131,6 +138,22 @@
       <div class="card"><h2>Detail Payroll</h2><div id="payrollList" class="muted">Pilih periode.</div></div>
     </section>
 
+    <section id="page-attendance" class="page" hidden>
+      <div class="page-heading"><div><h1>Absensi Barber</h1><p class="muted">Catat kehadiran manual, termasuk hari tanpa pelanggan.</p></div><button id="refreshAttendanceBtn" class="ghost" type="button">Refresh</button></div>
+      <div class="card">
+        <form id="attendanceForm">
+          <div class="form-grid">
+            <label>Tanggal<input id="attendanceDate" type="date" required></label>
+            <label>Barber<select id="attendanceBarber" required></select></label>
+            <label>Status<select id="attendancePresent"><option value="true">Hadir</option><option value="false">Tidak hadir</option></select></label>
+          </div>
+          <label>Catatan (opsional)<input id="attendanceNotes" maxlength="300" placeholder="Contoh: hadir tanpa pelanggan"></label>
+          <button class="primary" type="submit">Simpan Absensi</button><p id="attendanceMessage" class="message"></p>
+        </form>
+      </div>
+      <div class="card"><h2>Absensi pada tanggal dipilih</h2><div id="attendanceList" class="muted">Pilih tanggal.</div></div>
+    </section>
+
     <section id="page-payroll-settings" class="page" hidden>
       <h1>Aturan Payroll</h1>
       <p class="muted">Aturan disimpan berdasarkan periode. Payroll yang sudah dibuat tetap menyimpan snapshot aturan.</p>
@@ -145,11 +168,16 @@
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
             <option value="profit_share_50_50">Bagi Hasil</option>
+            <option value="daily_plus_commission">Gaji Harian + Komisi</option>
           </select></label>
           <div id="bonusFields" class="form-grid">
             <label>Gaji pokok<input id="settingBaseSalary" type="number" min="0" step="1000" value="2200000"></label>
             <label>Batas omzet bonus<input id="settingThreshold" type="number" min="0" step="1000" value="10000000"></label>
             <label>Bonus (%)<input id="settingBonusRate" type="number" min="0" max="100" step="0.1" value="20"></label>
+          </div>
+          <div id="dailyFields" class="form-grid" hidden>
+            <label>Gaji per hari hadir (Rp)<input id="settingDailyRate" type="number" min="0" step="1000" value="60000"></label>
+            <label>Komisi per pelanggan (Rp)<input id="settingCommissionRate" type="number" min="0" step="500" value="8000"></label>
           </div>
           <div id="shareFields" class="form-grid" hidden>
             <label>Bagian barber (%)<input id="settingBarberRate" type="number" min="0" max="100" step="0.1" value="50"></label>
@@ -381,7 +409,7 @@
       <div class="page-heading">
         <div>
           <h1>Laporan Keuangan</h1>
-          <p class="muted">Ringkasan pemasukan, pengeluaran, dan laba operasional. Payroll barber belum dikurangkan di tahap ini.</p>
+          <p class="muted">Ringkasan pemasukan, pengeluaran operasional, biaya payroll yang disetujui/dibayar, dan laba setelah payroll.</p>
         </div>
         <button id="refreshFinanceReportBtn" class="ghost" type="button">Refresh</button>
       </div>
@@ -410,7 +438,8 @@
         <div class="stat"><span>Penjualan Produk</span><b id="financeProductTotal">Rp0</b></div>
         <div class="stat"><span>Total Pemasukan</span><b id="financeIncomeTotal">Rp0</b></div>
         <div class="stat"><span>Total Pengeluaran</span><b id="financeExpenseTotal">Rp0</b></div>
-        <div class="stat"><span>Laba Operasional</span><b id="financeProfitTotal">Rp0</b></div>
+        <div class="stat"><span>Biaya Payroll</span><b id="financePayrollTotal">Rp0</b></div>
+        <div class="stat"><span>Laba Setelah Payroll</span><b id="financeProfitTotal">Rp0</b></div>
       </div>
 
       <div class="card">

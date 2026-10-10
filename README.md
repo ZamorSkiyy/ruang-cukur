@@ -19,3 +19,12 @@ Mulai 1 Oktober 2026: Rp2.200.000 + 20% dari omzet jasa di atas Rp10.000.000, bo
 Aturan payroll disimpan di Supabase, bukan ditanam permanen di JavaScript.
 
 - Laporan Omzet Barber: filter hari, minggu, bulan, tahun, dan barber.
+
+
+## Perbaikan absensi mandiri barber
+1. Upload seluruh isi folder ini ke GitHub/repository Vercel.
+2. Jalankan `ABSENSI_BARBER_SELF_SERVICE.sql` di Supabase SQL Editor.
+3. Deploy ulang di Vercel, lalu buka situs dan refresh.
+4. Login sebagai barber, pilih Menu > Absensi Barber > Absen Hadir Hari Ini.
+
+Barber hanya dapat membuat/melihat absensi miliknya sendiri untuk hari ini. Owner/admin tetap dapat mencatat absensi semua barber.

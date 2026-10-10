@@ -11,6 +11,10 @@ const loginForm = $("loginForm");
 const loginError = $("loginError");
 const userLabel = $("userLabel");
 const logoutBtn = $("logoutBtn");
+const menuToggle = $("menuToggle");
+const menuToggleLabel = $("menuToggleLabel");
+const currentPageLabel = $("currentPageLabel");
+const nav = $("nav");
 const navButtons = document.querySelectorAll("[data-page]");
 const statOmzet = $("statOmzet");
 const statBarber = $("statBarber");
@@ -38,6 +42,13 @@ const payrollSummary = $("payrollSummary");
 const payrollMessage = $("payrollMessage");
 const settingsList = $("settingsList");
 const settingsMessage = $("settingsMessage");
+const attendanceDate = $("attendanceDate");
+const attendanceBarber = $("attendanceBarber");
+const attendancePresent = $("attendancePresent");
+const attendanceNotes = $("attendanceNotes");
+const attendanceList = $("attendanceList");
+const attendanceMessage = $("attendanceMessage");
+const financePayrollTotal = $("financePayrollTotal");
 const barberManagerList = $("barberManagerList");
 const barberForm = $("barberForm");
 const barberMessage = $("barberMessage");
@@ -114,17 +125,31 @@ function showPage(page) {
   const target = $(`page-${page}`);
   if (target) target.hidden = false;
   navButtons.forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  const activeButton = [...navButtons].find(b => b.dataset.page === page);
+  if (currentPageLabel && activeButton) currentPageLabel.textContent = activeButton.textContent.trim();
+  if (menuToggleLabel) menuToggleLabel.textContent = "Menu";
+  if (menuToggle) menuToggle.setAttribute("aria-expanded", "false");
+  if (nav) nav.hidden = true;
+  window.scrollTo({ top: 0, behavior: "auto" });
   if (page === "dashboard") loadDashboard();
   if (page === "transactions") loadTransactions();
   if (page === "services") renderServices();
   if (page === "payroll") { populatePayrollPeriods(); loadPayroll(); }
   if (page === "payroll-settings") loadPayrollSettings();
+  if (page === "attendance") { initAttendance(); loadAttendance(); }
   if (page === "barbers") loadBarberManagement();
   if (page === "products") loadProducts();
   if (page === "product-sales") { loadProductsForSale(); loadProductSales(); }
   if (page === "expenses") loadExpenses();
   if (page === "barber-report") { populateBarberReportBarbers(); loadBarberReport(); }
   if (page === "finance-report") loadFinanceReport();
+}
+if (menuToggle && nav) {
+  menuToggle.addEventListener("click", () => {
+    const willOpen = nav.hidden;
+    nav.hidden = !willOpen;
+    menuToggle.setAttribute("aria-expanded", String(willOpen));
+  });
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
   if (["payrollSettingsNav", "barbersNav", "barberReportNav", "financeReportNav"].includes(button.id) && !isAdmin()) return;
@@ -727,15 +752,30 @@ productCancelBtn.addEventListener("click", resetProductForm);
 $("refreshProductsBtn").addEventListener("click", loadProducts);
 
 function renderBarberSelect() {
+  // Barber hanya boleh mencatat transaksi atas namanya sendiri.
+  // Owner/admin tetap dapat memilih barber mana pun yang aktif.
+  if (currentProfile?.role === "barber") {
+    const ownBarber = barbers.find(b => b.id === currentProfile.id);
+    const ownName = ownBarber?.name || currentProfile.full_name || currentProfile.name || ownBarber?.email || currentUser?.email || "Akun barber";
+    barberSelect.innerHTML = `<option value="${esc(currentProfile.id)}">${esc(ownName)}</option>`;
+    barberSelect.value = currentProfile.id;
+    barberSelect.disabled = true;
+    barberSelect.setAttribute("aria-label", "Barber yang login");
+    return;
+  }
+  barberSelect.disabled = false;
+  barberSelect.removeAttribute("aria-label");
   barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
 }
 
 transactionForm.addEventListener("submit", async event => {
   event.preventDefault(); setMessage(transactionMessage, "Menyimpan transaksi...");
   try {
-    if (!barberSelect.value) throw new Error("Pilih barber terlebih dahulu.");
+    if (!currentUser || !currentProfile) throw new Error("Sesi login belum siap. Silakan muat ulang halaman.");
+    const barberId = currentProfile.role === "barber" ? currentProfile.id : barberSelect.value;
+    if (!barberId) throw new Error("Pilih barber terlebih dahulu.");
     if (!serviceSelect.value) throw new Error("Pilih layanan terlebih dahulu.");
-    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
+    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberId, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
     if (error) throw error;
     setMessage(transactionMessage, "Transaksi berhasil disimpan.");
     await loadTransactions(); await loadDashboard();
@@ -782,10 +822,22 @@ async function loadPayroll() {
     if (error) throw error;
     if (!data?.length) { payrollList.innerHTML = `<p class="muted">Belum ada payroll untuk periode ini.</p>`; return; }
     const total = data.reduce((a,p)=>a+Number(p.total_salary||0),0); const turnover = Number(data[0].service_turnover||0); const method = data[0].payroll_method;
-    payrollSummary.innerHTML = `<div class="stat"><span>Omzet jasa</span><b>${rupiah(turnover)}</b></div><div class="stat"><span>Total payroll</span><b>${rupiah(total)}</b></div><div class="stat"><span>Metode</span><b>${method === "profit_share_50_50" ? "50:50" : "Gaji + Bonus"}</b></div><div class="stat"><span>Barber</span><b>${data.length}</b></div>`;
-    payrollList.innerHTML = data.map(p => `<div class="list-row"><div><strong>${esc(p.profiles?.name || p.profiles?.email || "Barber")}</strong><div class="muted">${p.status.toUpperCase()} • ${method === "profit_share_50_50" ? `Share ${rupiah(p.share_amount)}` : `Bonus ${rupiah(p.bonus_amount)}`}</div></div><strong>${rupiah(p.total_salary)}</strong></div>`).join("");
+    const methodLabel = method === "profit_share_50_50" ? "Bagi hasil 50:50" : method === "daily_plus_commission" ? "Gaji harian + komisi" : "Gaji pokok + bonus";
+    payrollSummary.innerHTML = `<div class="stat"><span>Omzet jasa</span><b>${rupiah(turnover)}</b></div><div class="stat"><span>Total payroll</span><b>${rupiah(total)}</b></div><div class="stat"><span>Metode</span><b>${methodLabel}</b></div><div class="stat"><span>Barber</span><b>${data.length}</b></div>`;
+    payrollList.innerHTML = data.map(p => { const detail = p.payroll_method === "daily_plus_commission" ? `${Number(p.attendance_days||0)} hari hadir × ${rupiah(p.daily_rate)} • ${Number(p.commission_heads||0)} pelanggan × ${rupiah(p.commission_rate)}` : p.payroll_method === "profit_share_50_50" ? `Bagi hasil ${rupiah(p.share_amount)}` : `Bonus ${rupiah(p.bonus_amount)}`; const action = p.status === "draft" ? `<button type="button" class="ghost" data-payroll-status="approved" data-payroll-id="${p.id}">Setujui</button>` : p.status === "approved" ? `<button type="button" class="ghost" data-payroll-status="paid" data-payroll-id="${p.id}">Tandai dibayar</button>` : ""; return `<div class="list-row"><div><strong>${esc(p.profiles?.name || p.profiles?.email || "Barber")}</strong><div class="muted">${esc(p.status.toUpperCase())} • ${detail}</div></div><div class="right"><strong>${rupiah(p.total_salary)}</strong><div>${action}</div></div></div>`; }).join("");
   } catch (error) { payrollList.innerHTML = `<p class="error">Gagal memuat payroll: ${esc(error.message)}</p>`; }
 }
+
+payrollList.addEventListener("click", async event => {
+  const button = event.target.closest("[data-payroll-status]"); if (!button || !isAdmin()) return;
+  const nextStatus = button.dataset.payrollStatus;
+  const promptText = nextStatus === "approved" ? "Setujui payroll ini? Pastikan nominal sudah diperiksa." : "Tandai payroll ini sudah dibayar?";
+  if (!confirm(promptText)) return;
+  try {
+    const { error } = await supabaseClient.from("payroll").update({ status: nextStatus, updated_at: new Date().toISOString() }).eq("id", button.dataset.payrollId).eq("status", nextStatus === "approved" ? "draft" : "approved");
+    if (error) throw error; await loadPayroll();
+  } catch (error) { setMessage(payrollMessage, `Gagal memperbarui status: ${error.message}`, true); }
+});
 
 $("refreshPayrollBtn").addEventListener("click", loadPayroll);
 payrollPeriodSelect.addEventListener("change", loadPayroll);
@@ -804,13 +856,15 @@ async function loadPayrollSettings() {
   try {
     const { data, error } = await supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false });
     if (error) throw error; payrollSettings = data || [];
-    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
+    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
   } catch (error) { settingsList.innerHTML = `<p class="error">Gagal memuat aturan: ${esc(error.message)}</p>`; }
 }
 
 function toggleSettingFields() {
-  const bonus = $("settingMethod").value === "base_plus_turnover_bonus";
-  $("bonusFields").hidden = !bonus; $("shareFields").hidden = bonus;
+  const method = $("settingMethod").value;
+  $("bonusFields").hidden = method !== "base_plus_turnover_bonus";
+  $("shareFields").hidden = method !== "profit_share_50_50";
+  $("dailyFields").hidden = method !== "daily_plus_commission";
 }
 $("settingMethod").addEventListener("change", toggleSettingFields);
 $("payrollSettingsForm").addEventListener("submit", async event => {
@@ -826,8 +880,10 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
       base_salary: method === "base_plus_turnover_bonus" ? Number($("settingBaseSalary").value || 0) : 0,
       turnover_threshold: method === "base_plus_turnover_bonus" ? Number($("settingThreshold").value || 0) : 0,
       bonus_rate: method === "base_plus_turnover_bonus" ? Number($("settingBonusRate").value || 0) / 100 : 0,
-      barber_share_rate: method === "profit_share_50_50" ? barberRate : 0,
-      owner_share_rate: method === "profit_share_50_50" ? ownerRate : 0,
+      barber_share_rate: method === "profit_share_50_50" ? barberRate : (method === "daily_plus_commission" ? 0 : 0.5),
+      owner_share_rate: method === "profit_share_50_50" ? ownerRate : (method === "daily_plus_commission" ? 0 : 0.5),
+      daily_rate: method === "daily_plus_commission" ? Number($("settingDailyRate").value || 60000) : 60000,
+      commission_rate: method === "daily_plus_commission" ? Number($("settingCommissionRate").value || 8000) : 8000,
       effective_from: $("settingEffectiveFrom").value,
       status: "active",
       notes: $("settingNotes").value.trim() || null,
@@ -841,6 +897,65 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
   } catch (error) { console.error(error); setMessage(settingsMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true); }
 });
 
+
+// ======================================================
+// ABSENSI BARBER MANUAL
+// ======================================================
+async function initAttendance() {
+  if (!currentProfile) return;
+  const isBarber = currentProfile.role === "barber";
+  const ownName = currentProfile.full_name || currentProfile.name || currentUser.email || "Akun barber";
+  if (isBarber) {
+    attendanceDate.value = todayLocalISO();
+    attendanceDate.max = todayLocalISO();
+    attendanceDate.min = todayLocalISO();
+    attendanceBarber.innerHTML = `<option value="${currentUser.id}">${esc(ownName)}</option>`;
+    attendanceBarber.value = currentUser.id;
+    attendanceBarber.closest("label").hidden = true;
+    attendancePresent.closest("label").hidden = true;
+    attendancePresent.value = "true";
+    if (attendanceNotes) attendanceNotes.placeholder = "Catatan opsional";
+    const submitBtn = document.querySelector('#attendanceForm button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = "Absen Hadir Hari Ini";
+  } else if (isAdmin()) {
+    if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
+    attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
+    attendanceBarber.closest("label").hidden = false;
+    attendancePresent.closest("label").hidden = false;
+    attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+  }
+}
+async function loadAttendance() {
+  if ((!isAdmin() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
+  attendanceList.textContent = "Memuat...";
+  try {
+    let query = supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value);
+    if (!isAdmin()) query = query.eq("barber_id", currentUser.id);
+    const { data, error } = await query.order("created_at");
+    if (error) throw error;
+    const rows = data || [];
+    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = isAdmin() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
+  } catch (error) { attendanceList.innerHTML = `<p class="error">Gagal memuat absensi: ${esc(error.message)}</p>`; }
+}
+attendanceDate?.addEventListener("change", loadAttendance);
+$("refreshAttendanceBtn")?.addEventListener("click", loadAttendance);
+$("attendanceForm")?.addEventListener("submit", async event => {
+  event.preventDefault(); if (!isAdmin() && currentProfile?.role !== "barber") return;
+  try {
+    const isBarber = currentProfile.role === "barber";
+    if (isBarber && attendanceDate.value !== todayLocalISO()) throw new Error("Barber hanya dapat absen untuk tanggal hari ini.");
+    const payload = { barber_id: isBarber ? currentUser.id : attendanceBarber.value, attendance_date: attendanceDate.value, present: isBarber ? true : attendancePresent.value === "true", notes: attendanceNotes.value.trim() || null, recorded_by: currentUser.id };
+    const { error } = await supabaseClient.from("barber_attendance").upsert(payload, { onConflict: "barber_id,attendance_date" });
+    if (error) throw error;
+    setMessage(attendanceMessage, "Absensi berhasil disimpan."); attendanceNotes.value = ""; await loadAttendance();
+  } catch (error) { setMessage(attendanceMessage, `Gagal menyimpan: ${error.message}`, true); }
+});
+attendanceList?.addEventListener("click", async event => {
+  const btn = event.target.closest("[data-attendance-delete]"); if (!btn || !isAdmin()) return;
+  if (!confirm("Hapus catatan absensi ini?")) return;
+  try { const { error } = await supabaseClient.from("barber_attendance").delete().eq("id", btn.dataset.attendanceDelete); if (error) throw error; await loadAttendance(); }
+  catch (error) { attendanceList.insertAdjacentHTML("afterbegin", `<p class="error">Gagal menghapus: ${esc(error.message)}</p>`); }
+});
 
 // ======================================================
 // LAPORAN KEUANGAN
@@ -857,15 +972,17 @@ async function loadFinanceReport() {
     const period = financeReportPeriod.value || "month";
     const range = getReportRange(period, financeReportDate.value);
 
-    const [{ data: txRows, error: txError }, { data: productRows, error: productError }, { data: expenseRows, error: expenseError }] = await Promise.all([
+    const [{ data: txRows, error: txError }, { data: productRows, error: productError }, { data: expenseRows, error: expenseError }, { data: payrollRows, error: payrollError }] = await Promise.all([
       supabaseClient.from("transactions").select("id, transaction_date, price_snapshot"),
       supabaseClient.from("product_sales").select("id, sale_date, total_amount, quantity"),
-      supabaseClient.from("expenses").select("id, expense_date, category, description, amount")
+      supabaseClient.from("expenses").select("id, expense_date, category, description, amount"),
+      supabaseClient.from("payroll").select("id, period_month, total_salary, status").in("status", ["approved", "paid"])
     ]);
 
     if (txError) throw txError;
     if (productError) throw productError;
     if (expenseError) throw expenseError;
+    if (payrollError) throw payrollError;
 
     const transactions = (txRows || []).filter(t => {
       const d = new Date(t.transaction_date);
@@ -885,13 +1002,18 @@ async function loadFinanceReport() {
     const serviceTotal = transactions.reduce((sum, t) => sum + Number(t.price_snapshot || 0), 0);
     const productTotal = productSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
     const expenseTotal = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    // Payroll dicatat sebagai biaya pada bulan payroll dan hanya dihitung setelah approved/paid.
+    const payroll = (payrollRows || []).filter(p => { const d = parseLocalDate(String(p.period_month).slice(0, 10)); return d >= range.start && d < range.end; });
+    const payrollTotal = payroll.reduce((sum, p) => sum + Number(p.total_salary || 0), 0);
     const incomeTotal = serviceTotal + productTotal;
-    const profit = incomeTotal - expenseTotal;
+    const operatingProfit = incomeTotal - expenseTotal;
+    const profit = operatingProfit - payrollTotal;
 
     financeServiceTotal.textContent = rupiah(serviceTotal);
     financeProductTotal.textContent = rupiah(productTotal);
     financeIncomeTotal.textContent = rupiah(incomeTotal);
     financeExpenseTotal.textContent = rupiah(expenseTotal);
+    financePayrollTotal.textContent = rupiah(payrollTotal);
     financeProfitTotal.textContent = rupiah(profit);
     financeReportRange.textContent = `Periode: ${formatReportRange(period, range)}`;
 
@@ -900,7 +1022,9 @@ async function loadFinanceReport() {
       <div class="list-row"><div><strong>Penjualan produk</strong><div class="muted">${productSales.length} transaksi</div></div><strong>${rupiah(productTotal)}</strong></div>
       <div class="list-row"><div><strong>Total pemasukan</strong></div><strong>${rupiah(incomeTotal)}</strong></div>
       <div class="list-row"><div><strong>Total pengeluaran</strong><div class="muted">${expenses.length} transaksi</div></div><strong>${rupiah(expenseTotal)}</strong></div>
-      <div class="list-row"><div><strong>Laba operasional</strong><div class="muted">Pemasukan − pengeluaran</div></div><strong>${rupiah(profit)}</strong></div>
+      <div class="list-row"><div><strong>Laba operasional</strong><div class="muted">Pemasukan − pengeluaran operasional</div></div><strong>${rupiah(operatingProfit)}</strong></div>
+      <div class="list-row"><div><strong>Biaya payroll</strong><div class="muted">Hanya payroll approved/paid (${payroll.length} baris)</div></div><strong>${rupiah(payrollTotal)}</strong></div>
+      <div class="list-row"><div><strong>Laba setelah payroll</strong><div class="muted">Laba operasional − biaya payroll</div></div><strong>${rupiah(profit)}</strong></div>
     `;
 
     const byCategory = new Map();
@@ -920,6 +1044,7 @@ async function loadFinanceReport() {
     financeProductTotal.textContent = rupiah(0);
     financeIncomeTotal.textContent = rupiah(0);
     financeExpenseTotal.textContent = rupiah(0);
+    financePayrollTotal.textContent = rupiah(0);
     financeProfitTotal.textContent = rupiah(0);
     financeBreakdown.innerHTML = `<p class="error">Gagal memuat laporan: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
     financeExpenseCategories.innerHTML = "";
