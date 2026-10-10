@@ -752,15 +752,30 @@ productCancelBtn.addEventListener("click", resetProductForm);
 $("refreshProductsBtn").addEventListener("click", loadProducts);
 
 function renderBarberSelect() {
+  // Barber hanya boleh mencatat transaksi atas namanya sendiri.
+  // Owner/admin tetap dapat memilih barber mana pun yang aktif.
+  if (currentProfile?.role === "barber") {
+    const ownBarber = barbers.find(b => b.id === currentProfile.id);
+    const ownName = ownBarber?.name || currentProfile.full_name || currentProfile.name || ownBarber?.email || currentUser?.email || "Akun barber";
+    barberSelect.innerHTML = `<option value="${esc(currentProfile.id)}">${esc(ownName)}</option>`;
+    barberSelect.value = currentProfile.id;
+    barberSelect.disabled = true;
+    barberSelect.setAttribute("aria-label", "Barber yang login");
+    return;
+  }
+  barberSelect.disabled = false;
+  barberSelect.removeAttribute("aria-label");
   barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
 }
 
 transactionForm.addEventListener("submit", async event => {
   event.preventDefault(); setMessage(transactionMessage, "Menyimpan transaksi...");
   try {
-    if (!barberSelect.value) throw new Error("Pilih barber terlebih dahulu.");
+    if (!currentUser || !currentProfile) throw new Error("Sesi login belum siap. Silakan muat ulang halaman.");
+    const barberId = currentProfile.role === "barber" ? currentProfile.id : barberSelect.value;
+    if (!barberId) throw new Error("Pilih barber terlebih dahulu.");
     if (!serviceSelect.value) throw new Error("Pilih layanan terlebih dahulu.");
-    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
+    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberId, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
     if (error) throw error;
     setMessage(transactionMessage, "Transaksi berhasil disimpan.");
     await loadTransactions(); await loadDashboard();
