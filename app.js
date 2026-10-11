@@ -116,11 +116,20 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 }
 function isAdmin() { return ["owner", "admin"].includes(currentProfile?.role); }
+function isCashier() { return currentProfile?.role === "kasir"; }
+function canAccessPage(page) {
+  const role = currentProfile?.role;
+  if (["owner", "admin"].includes(role)) return true;
+  if (role === "kasir") return ["dashboard", "transactions"].includes(page);
+  if (role === "barber") return !["payroll-settings", "barbers", "barber-report", "finance-report", "payroll"].includes(page);
+  return false;
+}
 function setMessage(el, message, error = false) { el.textContent = message || ""; el.classList.toggle("error", error); el.classList.toggle("success", !error && !!message); }
 function showLogin() { loginView.hidden = false; appView.hidden = true; }
 function showApp() { loginView.hidden = true; appView.hidden = false; }
 
 function showPage(page) {
+  if (!canAccessPage(page)) page = "dashboard";
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const target = $(`page-${page}`);
   if (target) target.hidden = false;
@@ -152,7 +161,7 @@ if (menuToggle && nav) {
   });
 }
 navButtons.forEach(button => button.addEventListener("click", () => {
-  if (["payrollSettingsNav", "barbersNav", "barberReportNav", "financeReportNav"].includes(button.id) && !isAdmin()) return;
+  if (!canAccessPage(button.dataset.page)) return;
   showPage(button.dataset.page);
 }));
 
@@ -186,7 +195,14 @@ async function loadProfile() {
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
-  productsNav.hidden = false;
+  // Kasir hanya dapat membuka Dashboard dan Transaksi.
+  document.querySelectorAll("#nav [data-page]").forEach(button => {
+    button.hidden = !canAccessPage(button.dataset.page);
+  });
+  productsNav.hidden = !isAdmin() && !["barber"].includes(data.role);
+  $("productSalesNav").hidden = !isAdmin() && data.role !== "barber";
+  $("expensesNav").hidden = !isAdmin() && data.role !== "barber";
+  $("attendanceNav").hidden = data.role !== "barber" && !isAdmin();
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
 
@@ -752,13 +768,20 @@ productCancelBtn.addEventListener("click", resetProductForm);
 $("refreshProductsBtn").addEventListener("click", loadProducts);
 
 function renderBarberSelect() {
-  barberSelect.innerHTML = barbers.length ? barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
+  const options = currentProfile?.role === "barber"
+    ? barbers.filter(b => b.id === currentUser?.id)
+    : barbers;
+  barberSelect.innerHTML = options.length ? options.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("") : `<option value="">Belum ada barber aktif</option>`;
+  // Barber hanya dapat mencatat transaksi untuk dirinya sendiri. Kasir dan Owner/Admin bisa memilih semua barber.
+  barberSelect.disabled = currentProfile?.role === "barber";
 }
 
 transactionForm.addEventListener("submit", async event => {
   event.preventDefault(); setMessage(transactionMessage, "Menyimpan transaksi...");
   try {
+    if (!canAccessPage("transactions")) throw new Error("Akun ini tidak memiliki izin mencatat transaksi.");
     if (!barberSelect.value) throw new Error("Pilih barber terlebih dahulu.");
+    if (currentProfile?.role === "barber" && barberSelect.value !== currentUser.id) throw new Error("Akun barber hanya dapat mencatat transaksi untuk dirinya sendiri.");
     if (!serviceSelect.value) throw new Error("Pilih layanan terlebih dahulu.");
     const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
     if (error) throw error;
@@ -771,50 +794,47 @@ async function getTransactions() {
   const { data, error } = await supabaseClient.from("transactions").select("id, transaction_date, created_at, price_snapshot, barber_share, owner_share, payment_method, barber_id, service_id").order("transaction_date", { ascending: false });
   if (error) throw error; return data || [];
 }
-function printTransactionReceipt(transactionId) {
-  // Buka jendela langsung dari klik pengguna agar Safari/iPhone tidak memblokir pop-up.
-  const receiptWindow = window.open("", "_blank", "width=420,height=650");
-  if (!receiptWindow) {
-    alert("Jendela nota diblokir browser. Izinkan pop-up lalu coba lagi.");
-    return;
-  }
-  receiptWindow.document.write("<p style='font:16px Arial;padding:20px'>Menyiapkan nota...</p>");
-  getTransactions().then(transactions => {
-    const t = transactions.find(row => row.id === transactionId);
-    if (!t) throw new Error("Transaksi tidak ditemukan.");
-    const barber = barbers.find(row => row.id === t.barber_id);
-    const service = services.find(row => row.id === t.service_id);
-    const date = new Date(t.transaction_date).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
-    const safe = value => esc(value);
-    receiptWindow.document.open();
-    receiptWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nota Ruang Cukur</title><style>
-      @page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font:12px/1.45 -apple-system,BlinkMacSystemFont,Arial,sans-serif;color:#111;width:72mm;max-width:100%;margin:0 auto;padding:8px}h1{font-size:20px;letter-spacing:2px;text-align:center;margin:0 0 2px}.center{text-align:center}.line{border-top:1px dashed #555;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;margin:5px 0}.row span:last-child{text-align:right}.total{font-size:16px;font-weight:700}.footer{text-align:center;margin-top:14px}@media screen{body{margin:16px auto;padding:16px;border:1px solid #ddd}}
-      </style></head><body><h1>RUANG CUKUR</h1><div class="center">Terima kasih telah berkunjung</div><div class="line"></div><div class="row"><span>No. Nota</span><span>${safe(String(t.id).slice(0,8).toUpperCase())}</span></div><div class="row"><span>Tanggal</span><span>${safe(date)}</span></div><div class="row"><span>Barber</span><span>${safe(barber?.name || barber?.email || "Barber")}</span></div><div class="line"></div><div><strong>${safe(service?.name || "Layanan")}</strong></div><div class="row"><span>Harga</span><span>${safe(rupiah(t.price_snapshot))}</span></div><div class="row"><span>Pembayaran</span><span>${safe(String(t.payment_method || "").toUpperCase())}</span></div><div class="line"></div><div class="row total"><span>TOTAL</span><span>${safe(rupiah(t.price_snapshot))}</span></div><div class="line"></div><div class="footer">Terima kasih telah berkunjung<br>Ruang Cukur</div><script>window.onload=()=>{setTimeout(()=>window.print(),250)};<\\/script></body></html>`);
-    receiptWindow.document.close();
-  }).catch(error => {
-    receiptWindow.close();
-    alert(`Gagal mencetak nota: ${error.message || error}`);
-  });
-}
-
-transactionList.addEventListener("click", event => {
-  const button = event.target.closest("[data-print-transaction]");
-  if (!button) return;
-  printTransactionReceipt(button.dataset.printTransaction);
-});
-
 async function loadTransactions() {
   try {
     const transactions = await getTransactions();
     transactionList.innerHTML = transactions.length ? transactions.slice(0, 100).map(t => {
       const barber = barbers.find(x => x.id === t.barber_id); const service = services.find(x => x.id === t.service_id);
       const date = new Date(t.transaction_date).toLocaleString("id-ID");
-      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div><button class="ghost receipt-print-btn" type="button" data-print-transaction="${esc(t.id)}">Cetak Nota</button></div></div>`;
+      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`;
     }).join("") : `<p class="muted">Belum ada transaksi.</p>`;
   } catch (error) { transactionList.innerHTML = `<p class="error">Gagal memuat transaksi: ${esc(error.message)}</p>`; }
 }
 
+
+// Manajemen akun kasir menggunakan Edge Function dengan validasi role Owner/Admin di server.
+const ownerCashierTools = $("ownerCashierTools");
+const addCashierBtn = $("addCashierBtn");
+const cashierForm = $("cashierForm");
+const cashierMessage = $("cashierMessage");
+if (addCashierBtn) addCashierBtn.addEventListener("click", () => { cashierForm.hidden = !cashierForm.hidden; });
+if ($("cancelCashierBtn")) $("cancelCashierBtn").addEventListener("click", () => { cashierForm.reset(); cashierForm.hidden = true; setMessage(cashierMessage, ""); });
+if (cashierForm) cashierForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setMessage(cashierMessage, "Membuat akun kasir...");
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) { setMessage(cashierMessage, "Sesi login tidak ditemukan. Silakan login ulang.", true); return; }
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("create-cashier", {
+      body: { name: $("cashierName").value.trim(), email: $("cashierEmail").value.trim(), password: $("cashierPassword").value },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error || "Akun kasir gagal dibuat.");
+    cashierForm.reset(); cashierForm.hidden = true;
+    setMessage(cashierMessage, `Akun kasir ${data.email} berhasil dibuat.`);
+  } catch (error) {
+    setMessage(cashierMessage, `Gagal membuat kasir: ${error.message}. Pastikan Edge Function create-cashier sudah dipasang.`, true);
+  }
+});
+
 async function loadDashboard() {
+  if (ownerCashierTools) ownerCashierTools.hidden = !isAdmin();
   try {
     const transactions = await getTransactions(); const now = new Date();
     const today = transactions.filter(t => { const d = new Date(t.transaction_date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate(); });
@@ -871,53 +891,11 @@ async function loadPayrollSettings() {
   if (!isAdmin()) return;
   settingsList.innerHTML = "Memuat...";
   try {
-    const [{ data, error }, { data: barberData, error: barberError }] = await Promise.all([
-      supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false }),
-      supabaseClient.from("profiles").select("id,name,email").eq("role", "barber").order("name")
-    ]);
-    if (error) throw error; if (barberError) throw barberError;
-    payrollSettings = data || [];
-    const barberSelect = $("settingBarberId");
-    if (barberSelect) {
-      const oldValue = barberSelect.value;
-      barberSelect.innerHTML = `<option value="">Semua barber (aturan umum)</option>` + (barberData || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
-      if ([...barberSelect.options].some(o => o.value === oldValue)) barberSelect.value = oldValue;
-    }
-    const names = Object.fromEntries((barberData || []).map(b => [b.id, b.name || b.email || "Barber"]));
-    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => {
-      const methodText = s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`;
-      const isActive = s.status === "active";
-      return `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">Untuk: ${s.barber_id ? esc(names[s.barber_id] || "Barber tertentu") : "Semua barber (aturan umum)"}</div><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${methodText}</div></div><div class="right"><span class="badge">${esc(s.status)}</span><div class="settings-actions"><button type="button" class="ghost" data-setting-toggle="${s.id}" data-next-status="${isActive ? "inactive" : "active"}">${isActive ? "Nonaktifkan" : "Aktifkan"}</button> <button type="button" class="ghost" data-setting-delete="${s.id}">Hapus</button></div></div></div>`;
-    }).join("") : `<p class="muted">Belum ada aturan.</p>`;
+    const { data, error } = await supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false });
+    if (error) throw error; payrollSettings = data || [];
+    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
   } catch (error) { settingsList.innerHTML = `<p class="error">Gagal memuat aturan: ${esc(error.message)}</p>`; }
 }
-
-settingsList.addEventListener("click", async event => {
-  if (!isAdmin()) return;
-  const toggle = event.target.closest("[data-setting-toggle]");
-  const remove = event.target.closest("[data-setting-delete]");
-  if (!toggle && !remove) return;
-  try {
-    if (toggle) {
-      const nextStatus = toggle.dataset.nextStatus;
-      if (!confirm(`${nextStatus === "inactive" ? "Nonaktifkan" : "Aktifkan kembali"} aturan ini?`)) return;
-      const { error } = await supabaseClient.from("payroll_settings").update({ status: nextStatus, updated_at: new Date().toISOString() }).eq("id", toggle.dataset.settingToggle);
-      if (error) throw error;
-      setMessage(settingsMessage, `Aturan berhasil ${nextStatus === "inactive" ? "dinonaktifkan" : "diaktifkan kembali"}.`);
-    } else {
-      const setting = payrollSettings.find(x => String(x.id) === String(remove.dataset.settingDelete));
-      if (!setting) throw new Error("Aturan tidak ditemukan.");
-      const { data: existingPayroll, error: payrollError } = await supabaseClient.from("payroll").select("id,period_month").gte("period_month", setting.effective_from).limit(1);
-      if (payrollError) throw payrollError;
-      if (existingPayroll?.length) throw new Error("Aturan tidak bisa dihapus karena sudah ada riwayat payroll pada/ setelah tanggal mulai. Nonaktifkan saja agar riwayat tetap aman.");
-      if (!confirm(`Hapus aturan '${setting.name}' secara permanen?`)) return;
-      const { error } = await supabaseClient.from("payroll_settings").delete().eq("id", setting.id);
-      if (error) throw error;
-      setMessage(settingsMessage, "Aturan berhasil dihapus.");
-    }
-    await loadPayrollSettings();
-  } catch (error) { setMessage(settingsMessage, `Gagal: ${error.message}`, true); }
-});
 
 function toggleSettingFields() {
   const method = $("settingMethod").value;
@@ -936,7 +914,6 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
     if (method === "profit_share_50_50" && Math.abs(barberRate + ownerRate - 1) > 0.00001) throw new Error("Bagian barber + owner harus 100%.");
     const payload = {
       name: $("settingName").value.trim(), method,
-      barber_id: $("settingBarberId").value || null,
       base_salary: method === "base_plus_turnover_bonus" ? Number($("settingBaseSalary").value || 0) : 0,
       turnover_threshold: method === "base_plus_turnover_bonus" ? Number($("settingThreshold").value || 0) : 0,
       bonus_rate: method === "base_plus_turnover_bonus" ? Number($("settingBonusRate").value || 0) / 100 : 0,

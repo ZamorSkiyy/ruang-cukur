@@ -55,6 +55,20 @@
     <section id="page-dashboard" class="page">
       <h1>Dashboard</h1>
       <p class="muted">Ringkasan hari ini</p>
+      <div id="ownerCashierTools" class="card" hidden>
+        <h2>Manajemen Kasir</h2>
+        <p class="muted">Buat akun kasir baru untuk memasukkan transaksi semua barber.</p>
+        <button id="addCashierBtn" class="primary" type="button">+ Tambah Kasir</button>
+        <p id="cashierMessage" class="message"></p>
+        <form id="cashierForm" class="card" hidden>
+          <label>Nama kasir<input id="cashierName" required maxlength="100" autocomplete="name"></label>
+          <label>Email login<input id="cashierEmail" type="email" required autocomplete="email"></label>
+          <label>Password awal<input id="cashierPassword" type="password" required minlength="8" autocomplete="new-password"></label>
+          <p class="muted">Berikan password awal kepada kasir secara aman. Kasir sebaiknya menggantinya setelah login.</p>
+          <button class="primary" type="submit">Buat Akun Kasir</button>
+          <button id="cancelCashierBtn" class="ghost" type="button">Batal</button>
+        </form>
+      </div>
       <div class="stats">
         <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
         <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
@@ -164,7 +178,6 @@
           <div class="form-grid">
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
-            <label>Berlaku untuk barber<select id="settingBarberId"><option value="">Semua barber (aturan umum)</option></select><small class="muted">Pilih barber tertentu untuk aturan khusus. Aturan khusus akan diprioritaskan daripada aturan umum.</small></label>
           </div>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
@@ -192,7 +205,6 @@
 
       <div class="card">
         <h2>Riwayat Aturan</h2>
-        <p class="muted">Aturan yang dinonaktifkan tidak digunakan untuk payroll baru. Hapus hanya tersedia jika belum ada payroll pada periode aturan tersebut.</p>
         <div id="settingsList" class="muted">Memuat...</div>
       </div>
     </section>
