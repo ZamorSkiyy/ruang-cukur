@@ -164,6 +164,7 @@
           <div class="form-grid">
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
+            <label>Berlaku untuk barber<select id="settingBarberId"><option value="">Semua barber (aturan umum)</option></select><small class="muted">Pilih barber tertentu untuk aturan khusus. Aturan khusus akan diprioritaskan daripada aturan umum.</small></label>
           </div>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
@@ -191,6 +192,7 @@
 
       <div class="card">
         <h2>Riwayat Aturan</h2>
+        <p class="muted">Aturan yang dinonaktifkan tidak digunakan untuk payroll baru. Hapus hanya tersedia jika belum ada payroll pada periode aturan tersebut.</p>
         <div id="settingsList" class="muted">Memuat...</div>
       </div>
     </section>
