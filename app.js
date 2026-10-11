@@ -771,13 +771,45 @@ async function getTransactions() {
   const { data, error } = await supabaseClient.from("transactions").select("id, transaction_date, created_at, price_snapshot, barber_share, owner_share, payment_method, barber_id, service_id").order("transaction_date", { ascending: false });
   if (error) throw error; return data || [];
 }
+function printTransactionReceipt(transactionId) {
+  // Buka jendela langsung dari klik pengguna agar Safari/iPhone tidak memblokir pop-up.
+  const receiptWindow = window.open("", "_blank", "width=420,height=650");
+  if (!receiptWindow) {
+    alert("Jendela nota diblokir browser. Izinkan pop-up lalu coba lagi.");
+    return;
+  }
+  receiptWindow.document.write("<p style='font:16px Arial;padding:20px'>Menyiapkan nota...</p>");
+  getTransactions().then(transactions => {
+    const t = transactions.find(row => row.id === transactionId);
+    if (!t) throw new Error("Transaksi tidak ditemukan.");
+    const barber = barbers.find(row => row.id === t.barber_id);
+    const service = services.find(row => row.id === t.service_id);
+    const date = new Date(t.transaction_date).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+    const safe = value => esc(value);
+    receiptWindow.document.open();
+    receiptWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nota Ruang Cukur</title><style>
+      @page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font:12px/1.45 -apple-system,BlinkMacSystemFont,Arial,sans-serif;color:#111;width:72mm;max-width:100%;margin:0 auto;padding:8px}h1{font-size:20px;letter-spacing:2px;text-align:center;margin:0 0 2px}.center{text-align:center}.line{border-top:1px dashed #555;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;margin:5px 0}.row span:last-child{text-align:right}.total{font-size:16px;font-weight:700}.footer{text-align:center;margin-top:14px}@media screen{body{margin:16px auto;padding:16px;border:1px solid #ddd}}
+      </style></head><body><h1>RUANG CUKUR</h1><div class="center">Terima kasih telah berkunjung</div><div class="line"></div><div class="row"><span>No. Nota</span><span>${safe(String(t.id).slice(0,8).toUpperCase())}</span></div><div class="row"><span>Tanggal</span><span>${safe(date)}</span></div><div class="row"><span>Barber</span><span>${safe(barber?.name || barber?.email || "Barber")}</span></div><div class="line"></div><div><strong>${safe(service?.name || "Layanan")}</strong></div><div class="row"><span>Harga</span><span>${safe(rupiah(t.price_snapshot))}</span></div><div class="row"><span>Pembayaran</span><span>${safe(String(t.payment_method || "").toUpperCase())}</span></div><div class="line"></div><div class="row total"><span>TOTAL</span><span>${safe(rupiah(t.price_snapshot))}</span></div><div class="line"></div><div class="footer">Terima kasih telah berkunjung<br>Ruang Cukur</div><script>window.onload=()=>{setTimeout(()=>window.print(),250)};<\\/script></body></html>`);
+    receiptWindow.document.close();
+  }).catch(error => {
+    receiptWindow.close();
+    alert(`Gagal mencetak nota: ${error.message || error}`);
+  });
+}
+
+transactionList.addEventListener("click", event => {
+  const button = event.target.closest("[data-print-transaction]");
+  if (!button) return;
+  printTransactionReceipt(button.dataset.printTransaction);
+});
+
 async function loadTransactions() {
   try {
     const transactions = await getTransactions();
     transactionList.innerHTML = transactions.length ? transactions.slice(0, 100).map(t => {
       const barber = barbers.find(x => x.id === t.barber_id); const service = services.find(x => x.id === t.service_id);
       const date = new Date(t.transaction_date).toLocaleString("id-ID");
-      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`;
+      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div><button class="ghost receipt-print-btn" type="button" data-print-transaction="${esc(t.id)}">Cetak Nota</button></div></div>`;
     }).join("") : `<p class="muted">Belum ada transaksi.</p>`;
   } catch (error) { transactionList.innerHTML = `<p class="error">Gagal memuat transaksi: ${esc(error.message)}</p>`; }
 }
