@@ -179,6 +179,12 @@
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
           </div>
+          <label>Berlaku untuk
+            <select id="settingBarberId">
+              <option value="">Semua barber (aturan umum)</option>
+            </select>
+          </label>
+          <p class="muted">Pilih barber untuk membuat aturan khusus. Jika memilih “Semua barber”, aturan menjadi aturan umum.</p>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
             <option value="profit_share_50_50">Bagi Hasil</option>

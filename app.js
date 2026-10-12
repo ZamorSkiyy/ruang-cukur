@@ -891,9 +891,21 @@ async function loadPayrollSettings() {
   if (!isAdmin()) return;
   settingsList.innerHTML = "Memuat...";
   try {
-    const { data, error } = await supabaseClient.from("payroll_settings").select("*").order("effective_from", { ascending: false });
+    // Isi dropdown aturan umum / khusus per barber dari profil barber aktif.
+    const barberDropdown = $("settingBarberId");
+    if (barberDropdown) {
+      const { data: activeBarbers, error: barberError } = await supabaseClient
+        .from("profiles").select("id,name,email")
+        .eq("role", "barber").eq("status", "active").order("name");
+      if (barberError) throw barberError;
+      const previousValue = barberDropdown.value;
+      barberDropdown.innerHTML = `<option value="">Semua barber (aturan umum)</option>` +
+        (activeBarbers || []).map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+      barberDropdown.value = previousValue;
+    }
+    const { data, error } = await supabaseClient.from("payroll_settings").select("*, profiles:barber_id(name,email)").order("effective_from", { ascending: false });
     if (error) throw error; payrollSettings = data || [];
-    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
+    settingsList.innerHTML = payrollSettings.length ? payrollSettings.map(s => `<div class="list-row"><div><strong>${esc(s.name)}</strong><div class="muted">Berlaku untuk: ${esc(s.profiles?.name || s.profiles?.email || (s.barber_id ? "Barber khusus" : "Semua barber"))}</div><div class="muted">${s.effective_from} ${s.effective_to ? `s/d ${s.effective_to}` : "→ sekarang"}</div><div class="muted">${s.method === "profit_share_50_50" ? `Bagi hasil ${(Number(s.barber_share_rate)*100).toFixed(1)}% / ${(Number(s.owner_share_rate)*100).toFixed(1)}%` : s.method === "daily_plus_commission" ? `Gaji ${rupiah(s.daily_rate)}/hari + ${rupiah(s.commission_rate)}/pelanggan` : `Gaji ${rupiah(s.base_salary)} • threshold ${rupiah(s.turnover_threshold)} • bonus ${(Number(s.bonus_rate)*100).toFixed(1)}%`}</div></div><span class="badge">${esc(s.status)}</span></div>`).join("") : `<p class="muted">Belum ada aturan.</p>`;
   } catch (error) { settingsList.innerHTML = `<p class="error">Gagal memuat aturan: ${esc(error.message)}</p>`; }
 }
 
@@ -914,6 +926,7 @@ $("payrollSettingsForm").addEventListener("submit", async event => {
     if (method === "profit_share_50_50" && Math.abs(barberRate + ownerRate - 1) > 0.00001) throw new Error("Bagian barber + owner harus 100%.");
     const payload = {
       name: $("settingName").value.trim(), method,
+      barber_id: $("settingBarberId")?.value || null,
       base_salary: method === "base_plus_turnover_bonus" ? Number($("settingBaseSalary").value || 0) : 0,
       turnover_threshold: method === "base_plus_turnover_bonus" ? Number($("settingThreshold").value || 0) : 0,
       bonus_rate: method === "base_plus_turnover_bonus" ? Number($("settingBonusRate").value || 0) / 100 : 0,
