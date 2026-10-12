@@ -48,6 +48,7 @@
       <button data-page="products" type="button" id="productsNav">Produk</button>
       <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
       <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
+      <button data-page="cashier-report" type="button" id="cashierReportNav">Laporan Tutup Toko</button>
       <button data-page="barber-report" type="button" id="barberReportNav">Laporan Omzet</button>
       <button data-page="finance-report" type="button" id="financeReportNav">Laporan Keuangan</button>
     </nav>
@@ -87,6 +88,9 @@
       <form id="transactionForm" class="card">
         <label>Barber<select id="barberSelect" required></select></label>
         <label>Layanan<select id="serviceSelect" required></select></label>
+        <label>Tambahan produk (opsional)<select id="combinedProductSelect"><option value="">Tidak ada produk</option></select></label>
+        <label>Jumlah produk (opsional)<input id="combinedProductQuantity" type="number" min="1" step="1" value="1"></label>
+        <p id="combinedSalePreview" class="muted">Pilih produk jika pelanggan juga membeli produk.</p>
         <label>Pembayaran<select id="paymentSelect" required>
           <option value="cash">Cash</option>
           <option value="qris">QRIS</option>
@@ -179,12 +183,6 @@
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
           </div>
-          <label>Berlaku untuk
-            <select id="settingBarberId">
-              <option value="">Semua barber (aturan umum)</option>
-            </select>
-          </label>
-          <p class="muted">Pilih barber untuk membuat aturan khusus. Jika memilih “Semua barber”, aturan menjadi aturan umum.</p>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
             <option value="profit_share_50_50">Bagi Hasil</option>
@@ -291,6 +289,17 @@
         <h2>Riwayat Penjualan</h2>
         <div id="productSalesList" class="muted">Memuat...</div>
       </div>
+    </section>
+
+
+    <section id="page-cashier-report" class="page" hidden>
+      <div class="page-heading"><div><h1>Laporan Tutup Toko</h1><p class="muted">Rekap transaksi jasa, produk, dan pengeluaran untuk tanggal yang dipilih.</p></div></div>
+      <div class="card">
+        <label>Tanggal laporan<input id="cashierReportDate" type="date" required></label>
+        <div class="button-row"><button id="loadCashierReportBtn" class="primary" type="button">Tampilkan Rekap</button><button id="printCashierReportBtn" class="ghost" type="button">Print Laporan</button></div>
+        <p id="cashierReportMessage" class="message"></p>
+      </div>
+      <div id="cashierReportOutput" class="card"><p class="muted">Pilih tanggal lalu tekan Tampilkan Rekap.</p></div>
     </section>
 
     <section id="page-expenses" class="page" hidden>
