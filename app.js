@@ -120,7 +120,7 @@ function isCashier() { return currentProfile?.role === "kasir"; }
 function canAccessPage(page) {
   const role = currentProfile?.role;
   if (["owner", "admin"].includes(role)) return true;
-  if (role === "kasir") return ["dashboard", "transactions"].includes(page);
+  if (role === "kasir") return ["dashboard", "transactions", "product-sales", "expenses"].includes(page);
   if (role === "barber") return !["payroll-settings", "barbers", "barber-report", "finance-report", "payroll"].includes(page);
   return false;
 }
@@ -195,13 +195,13 @@ async function loadProfile() {
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
-  // Kasir hanya dapat membuka Dashboard dan Transaksi.
+  // Kasir dapat membuka Dashboard, Transaksi Jasa, Penjualan Produk, dan Pengeluaran.
   document.querySelectorAll("#nav [data-page]").forEach(button => {
     button.hidden = !canAccessPage(button.dataset.page);
   });
   productsNav.hidden = !isAdmin() && !["barber"].includes(data.role);
-  $("productSalesNav").hidden = !isAdmin() && data.role !== "barber";
-  $("expensesNav").hidden = !isAdmin() && data.role !== "barber";
+  $("productSalesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
+  $("expensesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
   $("attendanceNav").hidden = data.role !== "barber" && !isAdmin();
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
