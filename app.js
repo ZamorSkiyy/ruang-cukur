@@ -126,7 +126,7 @@ function isCashier() { return currentProfile?.role === "kasir"; }
 function canAccessPage(page) {
   const role = currentProfile?.role;
   if (["owner", "admin"].includes(role)) return true;
-  if (role === "kasir") return ["dashboard", "transactions", "product-sales", "expenses", "cashier-report"].includes(page);
+  if (role === "kasir") return ["dashboard", "transactions", "products", "product-sales", "expenses", "cashier-report"].includes(page);
   if (role === "barber") return !["payroll-settings", "barbers", "barber-report", "finance-report", "payroll", "cashier-report"].includes(page);
   return false;
 }
@@ -206,7 +206,8 @@ async function loadProfile() {
   document.querySelectorAll("#nav [data-page]").forEach(button => {
     button.hidden = !canAccessPage(button.dataset.page);
   });
-  productsNav.hidden = !isAdmin() && !["barber"].includes(data.role);
+  productsNav.hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
+  $("productManagerCard").hidden = !isAdmin();
   $("productSalesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
   $("expensesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
   $("attendanceNav").hidden = data.role !== "barber" && !isAdmin();
@@ -537,6 +538,7 @@ function renderProducts() {
     return;
   }
   const actions = isAdmin();
+  const stockActions = isCashier();
   productList.innerHTML = products.map(p => `
     <div class="list-row product-row">
       <div>
@@ -548,14 +550,43 @@ function renderProducts() {
       <div class="service-actions">
         <strong>${rupiah(p.sell_price)}</strong>
         ${actions ? `<div class="button-row">
-          <button class="ghost product-edit-btn" type="button" data-id="${esc(p.id)}">Edit</button>
+          <button class="ghost product-edit-btn" type="button" data-id="${esc(p.id)}">Edit Produk</button>
           <button class="${p.status === "active" ? "danger" : "ghost"} product-status-btn" type="button" data-id="${esc(p.id)}">${p.status === "active" ? "Nonaktifkan" : "Aktifkan"}</button>
+        </div>` : stockActions ? `<div class="button-row">
+          <button class="ghost product-stock-btn" type="button" data-id="${esc(p.id)}">Ubah Stok</button>
         </div>` : ""}
       </div>
     </div>`).join("");
 
   productList.querySelectorAll(".product-edit-btn").forEach(btn => btn.addEventListener("click", () => startEditProduct(btn.dataset.id)));
   productList.querySelectorAll(".product-status-btn").forEach(btn => btn.addEventListener("click", () => toggleProductStatus(btn.dataset.id)));
+  productList.querySelectorAll(".product-stock-btn").forEach(btn => btn.addEventListener("click", () => updateProductStock(btn.dataset.id)));
+}
+
+async function updateProductStock(id) {
+  if (!isCashier()) return;
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  const answer = prompt(`Stok baru untuk ${product.name}:`, String(Number(product.stock || 0)));
+  if (answer === null) return;
+  const nextStock = Number(answer);
+  if (!Number.isInteger(nextStock) || nextStock < 0) {
+    alert("Stok harus berupa bilangan bulat 0 atau lebih.");
+    return;
+  }
+  try {
+    const { error } = await supabaseClient.rpc("cashier_update_product_stock", {
+      p_product_id: id,
+      p_stock: nextStock
+    });
+    if (error) throw error;
+    setMessage(productMessage, `Stok ${product.name} berhasil diperbarui menjadi ${nextStock}.`);
+    await loadProducts();
+    await loadProductsForSale();
+  } catch (error) {
+    console.error(error);
+    setMessage(productMessage, `Gagal mengubah stok: ${error.message || "Terjadi kesalahan."}`, true);
+  }
 }
 
 async function loadProductsForSale() {
@@ -858,13 +889,39 @@ async function getTransactions() {
 }
 async function loadTransactions() {
   try {
-    const transactions = await getTransactions();
-    transactionList.innerHTML = transactions.length ? transactions.slice(0, 100).map(t => {
-      const barber = barbers.find(x => x.id === t.barber_id); const service = services.find(x => x.id === t.service_id);
-      const date = new Date(t.transaction_date).toLocaleString("id-ID");
-      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`;
-    }).join("") : `<p class="muted">Belum ada transaksi.</p>`;
-  } catch (error) { transactionList.innerHTML = `<p class="error">Gagal memuat transaksi: ${esc(error.message)}</p>`; }
+    // Riwayat menggabungkan transaksi jasa dan penjualan produk.
+    // Penjualan produk disimpan pada product_sales, bukan di transactions.
+    const [transactions, productResult] = await Promise.all([
+      getTransactions(),
+      supabaseClient.from("product_sales")
+        .select("id, sale_date, quantity, unit_price, total_amount, payment_method, product_id, products:product_id(name), profiles:sold_by(name,email)")
+        .order("sale_date", { ascending: false })
+        .limit(100)
+    ]);
+    if (productResult.error) throw productResult.error;
+    const serviceItems = (transactions || []).map(t => {
+      const barber = barbers.find(x => x.id === t.barber_id);
+      const service = services.find(x => x.id === t.service_id);
+      return {
+        kind: "service",
+        timestamp: t.transaction_date || t.created_at,
+        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
+      };
+    });
+    const productItems = (productResult.data || []).map(s => ({
+      kind: "product",
+      timestamp: s.sale_date,
+      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
+    }));
+    const allItems = [...serviceItems, ...productItems]
+      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+      .slice(0, 100);
+    transactionList.innerHTML = allItems.length
+      ? allItems.map(item => item.html).join("")
+      : `<p class="muted">Belum ada transaksi.</p>`;
+  } catch (error) {
+    transactionList.innerHTML = `<p class="error">Gagal memuat riwayat transaksi: ${esc(error.message || "Terjadi kesalahan")}</p>`;
+  }
 }
 
 
