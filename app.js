@@ -905,13 +905,13 @@ async function loadTransactions() {
       return {
         kind: "service",
         timestamp: t.transaction_date || t.created_at,
-        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
+        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div><div class="history-actions"><button class="ghost history-edit-service" data-id="${esc(t.id)}" type="button">Edit</button><button class="danger history-delete-service" data-id="${esc(t.id)}" type="button">Hapus</button></div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
       };
     });
     const productItems = (productResult.data || []).map(s => ({
       kind: "product",
       timestamp: s.sale_date,
-      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
+      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div><div class="history-actions"><button class="ghost history-edit-product" data-id="${esc(s.id)}" type="button">Edit</button><button class="danger history-delete-product" data-id="${esc(s.id)}" type="button">Hapus</button></div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
     }));
     const allItems = [...serviceItems, ...productItems]
       .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
@@ -919,11 +919,77 @@ async function loadTransactions() {
     transactionList.innerHTML = allItems.length
       ? allItems.map(item => item.html).join("")
       : `<p class="muted">Belum ada transaksi.</p>`;
+    const canEdit = ["owner", "kasir", "barber"].includes(currentProfile?.role);
+    transactionList.querySelectorAll(".history-edit-service, .history-delete-service, .history-edit-product, .history-delete-product").forEach(b => b.hidden = !canEdit);
+    transactionList.querySelectorAll(".history-edit-service").forEach(b => b.addEventListener("click", () => editServiceTransaction(b.dataset.id)));
+    transactionList.querySelectorAll(".history-delete-service").forEach(b => b.addEventListener("click", () => deleteHistoryItem("transactions", b.dataset.id)));
+    transactionList.querySelectorAll(".history-edit-product").forEach(b => b.addEventListener("click", () => editProductSale(b.dataset.id)));
+    transactionList.querySelectorAll(".history-delete-product").forEach(b => b.addEventListener("click", () => deleteHistoryItem("product_sales", b.dataset.id)));
+    const resetBtn = $("resetTransactionsBtn");
+    if (resetBtn) resetBtn.hidden = currentProfile?.role !== "owner";
   } catch (error) {
     transactionList.innerHTML = `<p class="error">Gagal memuat riwayat transaksi: ${esc(error.message || "Terjadi kesalahan")}</p>`;
   }
 }
 
+
+function canCorrectTransactions() { return ["owner", "kasir", "barber"].includes(currentProfile?.role); }
+async function editServiceTransaction(id) {
+  if (!canCorrectTransactions()) return;
+  const { data: row, error } = await supabaseClient.from("transactions").select("id, service_id, barber_id, payment_method").eq("id", id).single();
+  if (error) { alert("Gagal membaca transaksi: " + error.message); return; }
+  const currentService = services.find(x => x.id === row.service_id);
+  const serviceName = prompt("Nama layanan baru (ketik persis):\n" + services.map(x => x.name).join("\n"), currentService?.name || "");
+  if (serviceName === null) return;
+  const service = services.find(x => x.name.toLowerCase() === serviceName.trim().toLowerCase());
+  if (!service) { alert("Nama layanan tidak cocok dengan daftar layanan."); return; }
+  let barber = barbers.find(x => x.id === row.barber_id);
+  if (currentProfile?.role === "owner") {
+    const barberName = prompt("Nama barber baru (ketik persis):\n" + barbers.map(x => x.name || x.email).join("\n"), barber?.name || barber?.email || "");
+    if (barberName === null) return;
+    barber = barbers.find(x => (x.name || x.email || "").toLowerCase() === barberName.trim().toLowerCase());
+    if (!barber) { alert("Nama barber tidak cocok."); return; }
+  }
+  const payment = prompt("Metode pembayaran: cash, qris, atau transfer", row.payment_method || "cash");
+  if (payment === null) return;
+  if (!["cash", "qris", "transfer"].includes(payment.trim().toLowerCase())) { alert("Metode pembayaran tidak valid."); return; }
+  const { error: updateError } = await supabaseClient.from("transactions").update({ service_id: service.id, barber_id: barber.id, payment_method: payment.trim().toLowerCase() }).eq("id", id);
+  if (updateError) { alert("Gagal mengedit transaksi: " + updateError.message); return; }
+  alert("Transaksi diperbarui. Periksa nilai harga dan pembagian barber/owner sebelum menutup laporan.");
+  await Promise.all([loadTransactions(), loadDashboard()]);
+}
+async function editProductSale(id) {
+  if (!canCorrectTransactions()) return;
+  const { data: row, error } = await supabaseClient.from("product_sales").select("id, quantity, unit_price, payment_method").eq("id", id).single();
+  if (error) { alert("Gagal membaca penjualan produk: " + error.message); return; }
+  const q = prompt("Jumlah produk baru:", String(row.quantity));
+  if (q === null) return;
+  const quantity = Number(q);
+  if (!Number.isInteger(quantity) || quantity < 1) { alert("Jumlah harus bilangan bulat minimal 1."); return; }
+  const payment = prompt("Metode pembayaran: cash, qris, atau transfer", row.payment_method || "cash");
+  if (payment === null) return;
+  if (!["cash", "qris", "transfer"].includes(payment.trim().toLowerCase())) { alert("Metode pembayaran tidak valid."); return; }
+  const { error: updateError } = await supabaseClient.from("product_sales").update({ quantity, total_amount: quantity * Number(row.unit_price), payment_method: payment.trim().toLowerCase() }).eq("id", id);
+  if (updateError) { alert("Gagal mengedit penjualan produk: " + updateError.message); return; }
+  alert("Penjualan produk diperbarui. Periksa stok barang setelah koreksi.");
+  await Promise.all([loadTransactions(), loadDashboard(), loadProducts()]);
+}
+async function deleteHistoryItem(table, id) {
+  if (!canCorrectTransactions()) return;
+  if (!confirm("Yakin menghapus transaksi ini? Stok produk perlu diperiksa setelah menghapus penjualan.")) return;
+  const { error } = await supabaseClient.from(table).delete().eq("id", id);
+  if (error) { alert("Gagal menghapus transaksi: " + error.message); return; }
+  await Promise.all([loadTransactions(), loadDashboard(), loadProducts(), loadProductSales()]);
+}
+async function resetAllTransactions() {
+  if (currentProfile?.role !== "owner") return;
+  const confirmation = prompt('RESET SEMUA TRANSAKSI akan menghapus transaksi jasa dan penjualan produk. Layanan, produk, akun, pengeluaran dan payroll tidak dihapus. Ketik RESET untuk melanjutkan.');
+  if (confirmation !== "RESET") return;
+  const { error } = await supabaseClient.rpc("owner_reset_transactions");
+  if (error) { alert("Reset gagal: " + error.message); return; }
+  alert("Transaksi jasa dan penjualan produk berhasil direset.");
+  await Promise.all([loadTransactions(), loadDashboard(), loadProductSales(), loadProducts()]);
+}
 
 // Manajemen akun kasir menggunakan Edge Function dengan validasi role Owner/Admin di server.
 const ownerCashierTools = $("ownerCashierTools");

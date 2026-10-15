@@ -636,3 +636,11 @@ input:focus, select:focus { border-color: #8c877e; outline: none; }
   body.printing-report .list-row { break-inside: avoid; }
   body.printing-report .stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+
+/* Riwayat transaksi dibatasi tinggi agar tidak memenuhi halaman. */
+.history-scroll { max-height: 420px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding-right: 4px; }
+.history-scroll .list-row { min-width: 0; }
+.history-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.history-actions button { padding: 6px 10px; font-size: 0.85rem; }
+@media (max-width: 600px) { .history-scroll { max-height: 340px; } }

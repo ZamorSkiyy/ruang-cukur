@@ -100,8 +100,9 @@
         <p id="transactionMessage" class="message"></p>
       </form>
       <div class="card">
-        <h2>Riwayat</h2>
-        <div id="transactionList" class="muted">Memuat...</div>
+        <div class="page-heading"><h2>Riwayat</h2><button id="resetTransactionsBtn" class="danger" type="button" hidden onclick="resetAllTransactions()">Reset Semua Transaksi</button></div>
+        <p class="muted">Daftar dibatasi tinggi dan dapat digulir.</p>
+        <div id="transactionList" class="muted history-scroll">Memuat...</div>
       </div>
     </section>
 
