@@ -25,6 +25,24 @@ const paymentSelect = $("paymentSelect");
 const transactionForm = $("transactionForm");
 const transactionMessage = $("transactionMessage");
 const transactionList = $("transactionList");
+
+// Delegated click handler: remains active when the scrollable history is rerendered.
+if (transactionList && !transactionList.dataset.printHandlerBound) {
+  transactionList.dataset.printHandlerBound = "true";
+  transactionList.addEventListener("click", event => {
+    const button = event.target.closest("button.history-print-service, button.history-print-product");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const task = button.classList.contains("history-print-service")
+      ? printServiceTransaction(button.dataset.id)
+      : printProductSale(button.dataset.id);
+    Promise.resolve(task).catch(error => {
+      console.error("Cetak nota gagal:", error);
+      alert("Cetak nota gagal: " + (error?.message || "Terjadi kesalahan. Muat ulang aplikasi dan coba lagi."));
+    });
+  });
+}
 const serviceList = $("serviceList");
 const serviceForm = $("serviceForm");
 const serviceName = $("serviceName");
@@ -924,8 +942,6 @@ async function loadTransactions() {
     transactionList.querySelectorAll(".history-delete-service").forEach(b => b.addEventListener("click", () => deleteHistoryItem("transactions", b.dataset.id)));
     transactionList.querySelectorAll(".history-edit-product").forEach(b => b.addEventListener("click", () => editProductSale(b.dataset.id)));
     transactionList.querySelectorAll(".history-delete-product").forEach(b => b.addEventListener("click", () => deleteHistoryItem("product_sales", b.dataset.id)));
-    transactionList.querySelectorAll(".history-print-service").forEach(b => b.addEventListener("click", () => printServiceTransaction(b.dataset.id)));
-    transactionList.querySelectorAll(".history-print-product").forEach(b => b.addEventListener("click", () => printProductSale(b.dataset.id)));
     const resetBtn = $("resetTransactionsBtn");
     if (resetBtn) resetBtn.hidden = currentProfile?.role !== "owner";
   } catch (error) {
@@ -934,34 +950,82 @@ async function loadTransactions() {
 }
 
 
+function openReceiptWindow() {
+  // Open synchronously from the tap handler so iOS Safari does not block it.
+  let win = null;
+  try {
+    win = window.open("about:blank", "_blank");
+  } catch (error) {
+    console.error("Tidak dapat membuka jendela nota:", error);
+  }
+  if (!win) {
+    alert("Safari tidak membuka halaman nota. Pastikan tombol ditekan langsung, lalu izinkan pop-up untuk ruang-cukur.vercel.app di Pengaturan Safari.");
+    return null;
+  }
+  win.document.open();
+  win.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nota Ruang Cukur</title>
+  <style>
+  *{box-sizing:border-box}body{font:14px -apple-system,BlinkMacSystemFont,Arial,sans-serif;color:#111;margin:0;padding:12px}
+  .receipt{width:72mm;max-width:100%;margin:0 auto}.center{text-align:center}hr{border:0;border-top:1px dashed #777;margin:10px 0}
+  .line{display:flex;justify-content:space-between;gap:8px;margin:8px 0}.small{font-size:12px;color:#444}.total{font-weight:700;font-size:16px}
+  .actions{display:flex;gap:8px;justify-content:center;margin:16px auto}.actions button{padding:10px 16px;border:0;border-radius:8px;background:#111;color:#fff;font-size:16px}
+  @media print{.actions{display:none}body{padding:0}@page{size:auto;margin:5mm}}
+  </style></head><body><main id="receipt" class="receipt"><p>Memuat nota...</p></main>
+  <div class="actions"><button onclick="window.print()">Cetak Nota</button><button onclick="window.close()">Tutup</button></div>
+  </body></html>`);
+  win.document.close();
+  return win;
+}
+function fillReceiptWindow(win, receipt) {
+  const lines = receipt.lines || [];
+  const root = win.document.getElementById("receipt");
+  if (!root) return;
+  root.innerHTML = `<div class="center"><h2>RUANG CUKUR</h2><strong>${esc(receipt.title || "NOTA TRANSAKSI")}</strong><p>${esc(new Date(receipt.date || Date.now()).toLocaleString("id-ID"))}</p></div><hr>
+    ${lines.map(l => `<div class="line"><div><strong>${esc(l.name || "")}</strong><div class="small">${esc(l.detail || "")}</div></div><strong>${rupiah(l.total || 0)}</strong></div>`).join("")}
+    <hr><div class="line total"><span>TOTAL</span><span>${rupiah(receipt.total || 0)}</span></div><p>Pembayaran: ${esc(String(receipt.payment || "").toUpperCase())}</p><hr><p class="center">Terima kasih telah berkunjung 🙏</p>`;
+}
 async function printServiceTransaction(id) {
+  const printWindow = openReceiptWindow();
+  if (!printWindow) return;
   const { data: row, error } = await supabaseClient.from("transactions")
     .select("id, transaction_date, created_at, price_snapshot, payment_method, barber_id, service_id")
     .eq("id", id).single();
-  if (error) { alert("Gagal memuat nota: " + error.message); return; }
+  if (error) {
+    printWindow.close();
+    alert("Gagal memuat nota: " + error.message);
+    return;
+  }
   const service = services.find(x => x.id === row.service_id);
   const barber = barbers.find(x => x.id === row.barber_id);
-  printReceipt({
+  fillReceiptWindow(printWindow, {
     title: "NOTA TRANSAKSI JASA",
     date: row.transaction_date || row.created_at,
     payment: row.payment_method,
     lines: [{ name: service?.name || "Layanan", detail: `Barber: ${barber?.name || barber?.email || "Barber"}`, total: Number(row.price_snapshot || 0) }],
     total: Number(row.price_snapshot || 0)
   });
+  printWindow.focus();
 }
 async function printProductSale(id) {
+  const printWindow = openReceiptWindow();
+  if (!printWindow) return;
   const { data: row, error } = await supabaseClient.from("product_sales")
     .select("id, sale_date, quantity, unit_price, total_amount, payment_method, products(name)")
     .eq("id", id).single();
-  if (error) { alert("Gagal memuat nota produk: " + error.message); return; }
+  if (error) {
+    printWindow.close();
+    alert("Gagal memuat nota produk: " + error.message);
+    return;
+  }
   const total = Number(row.total_amount ?? Number(row.unit_price || 0) * Number(row.quantity || 0));
-  printReceipt({
+  fillReceiptWindow(printWindow, {
     title: "NOTA PENJUALAN PRODUK",
     date: row.sale_date,
     payment: row.payment_method,
     lines: [{ name: row.products?.name || "Produk", detail: `${Number(row.quantity || 0)} × ${rupiah(row.unit_price)}`, total }],
     total
   });
+  printWindow.focus();
 }
 
 function canCorrectTransactions() { return ["owner", "kasir", "barber"].includes(currentProfile?.role); }
