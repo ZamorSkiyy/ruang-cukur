@@ -17,8 +17,6 @@ const currentPageLabel = $("currentPageLabel");
 const nav = $("nav");
 const navButtons = document.querySelectorAll("[data-page]");
 const statOmzet = $("statOmzet");
-const statBarber = $("statBarber");
-const statOwner = $("statOwner");
 const statCount = $("statCount");
 const recent = $("recent");
 const barberSelect = $("barberSelect");
@@ -418,12 +416,13 @@ async function changeBarberStatus(action, barberId, barberName) {
 
   setMessage(barberMessage, isDeactivate ? "Menonaktifkan barber..." : "Mengaktifkan barber...");
   try {
-    const { data, error } = await supabaseClient.functions.invoke("manage-barber", {
-      body: { action, barber_id: barberId }
+    const { data, error } = await supabaseClient.rpc("owner_set_barber_status", {
+      p_barber_id: barberId,
+      p_status: isDeactivate ? "inactive" : "active"
     });
     if (error) throw error;
     if (data?.success === false) throw new Error(data.error || "Operasi gagal.");
-    setMessage(barberMessage, data?.message || (isDeactivate ? "Barber dinonaktifkan." : "Barber diaktifkan."));
+    setMessage(barberMessage, data?.message || (isDeactivate ? "Barber dinonaktifkan." : "Barber berhasil diaktifkan kembali."));
     await loadBarbers();
     await loadBarberManagement();
   } catch (error) {
@@ -1052,7 +1051,7 @@ async function loadDashboard() {
     const omzet = today.reduce((a,t) => a + Number(t.price_snapshot || 0), 0);
     const barber = today.reduce((a,t) => a + Number(t.barber_share || 0), 0);
     const owner = today.reduce((a,t) => a + Number(t.owner_share || 0), 0);
-    statOmzet.textContent = rupiah(omzet); statBarber.textContent = rupiah(barber); statOwner.textContent = rupiah(owner); statCount.textContent = today.length;
+    statOmzet.textContent = rupiah(omzet); statCount.textContent = today.length;
     recent.innerHTML = today.length ? today.slice(0,5).map(t => { const b=barbers.find(x=>x.id===t.barber_id), s=services.find(x=>x.id===t.service_id); return `<div class="list-row"><div><strong>${esc(s?.name || "Layanan")}</strong><div class="muted">${esc(b?.name || b?.email || "Barber")}</div></div><strong>${rupiah(t.price_snapshot)}</strong></div>`; }).join("") : `<p class="muted">Belum ada transaksi hari ini.</p>`;
   } catch (error) { recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`; }
 }
