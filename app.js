@@ -904,13 +904,13 @@ async function loadTransactions() {
       return {
         kind: "service",
         timestamp: t.transaction_date || t.created_at,
-        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div><div class="history-actions"><button class="ghost history-edit-service" data-id="${esc(t.id)}" type="button">Edit</button><button class="danger history-delete-service" data-id="${esc(t.id)}" type="button">Hapus</button></div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
+        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div><div class="history-actions"><button class="ghost history-edit-service" data-id="${esc(t.id)}" type="button">Edit</button><button class="danger history-delete-service" data-id="${esc(t.id)}" type="button">Hapus</button><button class="ghost history-print-service" data-id="${esc(t.id)}" type="button">Cetak Nota</button></div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
       };
     });
     const productItems = (productResult.data || []).map(s => ({
       kind: "product",
       timestamp: s.sale_date,
-      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div><div class="history-actions"><button class="ghost history-edit-product" data-id="${esc(s.id)}" type="button">Edit</button><button class="danger history-delete-product" data-id="${esc(s.id)}" type="button">Hapus</button></div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
+      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div><div class="history-actions"><button class="ghost history-edit-product" data-id="${esc(s.id)}" type="button">Edit</button><button class="danger history-delete-product" data-id="${esc(s.id)}" type="button">Hapus</button><button class="ghost history-print-product" data-id="${esc(s.id)}" type="button">Cetak Nota</button></div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
     }));
     const allItems = [...serviceItems, ...productItems]
       .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
@@ -924,6 +924,8 @@ async function loadTransactions() {
     transactionList.querySelectorAll(".history-delete-service").forEach(b => b.addEventListener("click", () => deleteHistoryItem("transactions", b.dataset.id)));
     transactionList.querySelectorAll(".history-edit-product").forEach(b => b.addEventListener("click", () => editProductSale(b.dataset.id)));
     transactionList.querySelectorAll(".history-delete-product").forEach(b => b.addEventListener("click", () => deleteHistoryItem("product_sales", b.dataset.id)));
+    transactionList.querySelectorAll(".history-print-service").forEach(b => b.addEventListener("click", () => printServiceTransaction(b.dataset.id)));
+    transactionList.querySelectorAll(".history-print-product").forEach(b => b.addEventListener("click", () => printProductSale(b.dataset.id)));
     const resetBtn = $("resetTransactionsBtn");
     if (resetBtn) resetBtn.hidden = currentProfile?.role !== "owner";
   } catch (error) {
@@ -931,6 +933,36 @@ async function loadTransactions() {
   }
 }
 
+
+async function printServiceTransaction(id) {
+  const { data: row, error } = await supabaseClient.from("transactions")
+    .select("id, transaction_date, created_at, price_snapshot, payment_method, barber_id, service_id")
+    .eq("id", id).single();
+  if (error) { alert("Gagal memuat nota: " + error.message); return; }
+  const service = services.find(x => x.id === row.service_id);
+  const barber = barbers.find(x => x.id === row.barber_id);
+  printReceipt({
+    title: "NOTA TRANSAKSI JASA",
+    date: row.transaction_date || row.created_at,
+    payment: row.payment_method,
+    lines: [{ name: service?.name || "Layanan", detail: `Barber: ${barber?.name || barber?.email || "Barber"}`, total: Number(row.price_snapshot || 0) }],
+    total: Number(row.price_snapshot || 0)
+  });
+}
+async function printProductSale(id) {
+  const { data: row, error } = await supabaseClient.from("product_sales")
+    .select("id, sale_date, quantity, unit_price, total_amount, payment_method, products(name)")
+    .eq("id", id).single();
+  if (error) { alert("Gagal memuat nota produk: " + error.message); return; }
+  const total = Number(row.total_amount ?? Number(row.unit_price || 0) * Number(row.quantity || 0));
+  printReceipt({
+    title: "NOTA PENJUALAN PRODUK",
+    date: row.sale_date,
+    payment: row.payment_method,
+    lines: [{ name: row.products?.name || "Produk", detail: `${Number(row.quantity || 0)} × ${rupiah(row.unit_price)}`, total }],
+    total
+  });
+}
 
 function canCorrectTransactions() { return ["owner", "kasir", "barber"].includes(currentProfile?.role); }
 async function editServiceTransaction(id) {
