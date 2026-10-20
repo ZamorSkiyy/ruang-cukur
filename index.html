@@ -40,39 +40,25 @@
     <nav id="nav" class="nav" hidden>
       <button data-page="dashboard" class="active" type="button">Dashboard</button>
       <button data-page="transactions" type="button">Transaksi</button>
-      <button data-page="services" type="button" id="servicesNav">Layanan</button>
+      <button data-page="services" type="button">Layanan</button>
       <button data-page="payroll" type="button">Payroll</button>
       <button data-page="attendance" type="button" id="attendanceNav">Absensi Barber</button>
       <button data-page="payroll-settings" type="button" id="payrollSettingsNav">Aturan Gaji</button>
       <button data-page="barbers" type="button" id="barbersNav">Barber</button>
       <button data-page="products" type="button" id="productsNav">Produk</button>
-      
+      <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
       <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
-      <button data-page="barber-report" type="button" id="barberReportNav">Laporan Pendapatan</button>
+      <button data-page="barber-report" type="button" id="barberReportNav">Laporan Omzet</button>
       <button data-page="finance-report" type="button" id="financeReportNav">Laporan Keuangan</button>
     </nav>
 
     <section id="page-dashboard" class="page">
       <h1>Dashboard</h1>
       <p class="muted">Ringkasan hari ini</p>
-      <div id="ownerCashierTools" class="card" hidden>
-        <h2>Manajemen Kasir</h2>
-        <p class="muted">Buat akun kasir baru untuk memasukkan transaksi semua barber.</p>
-        <button id="addCashierBtn" class="primary" type="button">+ Tambah Kasir</button>
-        <p id="cashierMessage" class="message"></p>
-        <form id="cashierForm" class="card" hidden>
-          <label>Nama kasir<input id="cashierName" required maxlength="100" autocomplete="name"></label>
-          <label>Email login<input id="cashierEmail" type="email" required autocomplete="email"></label>
-          <label>Password awal<input id="cashierPassword" type="password" required minlength="8" autocomplete="new-password"></label>
-          <p class="muted">Berikan password awal kepada kasir secara aman. Kasir sebaiknya menggantinya setelah login.</p>
-          <button class="primary" type="submit">Buat Akun Kasir</button>
-          <button id="cancelCashierBtn" class="ghost" type="button">Batal</button>
-        </form>
-      </div>
       <div class="stats">
         <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
-        
-        
+        <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
+        <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
         <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
       </div>
       <div class="card">
@@ -92,48 +78,11 @@
           <option value="qris">QRIS</option>
           <option value="transfer">Transfer</option>
         </select></label>
-        <button class="primary" type="submit">Simpan Transaksi Jasa</button>
-        <button id="printLastTransactionBtn" class="ghost" type="button" hidden>Cetak Nota Transaksi Terakhir</button>
+        <button class="primary" type="submit">Simpan Transaksi</button>
         <p id="transactionMessage" class="message"></p>
       </form>
-      <h2>Penjualan Produk</h2>
-    <div id="embeddedProductSales" class="card">
-      <div class="page-heading">
-        <div><h1>Penjualan Produk</h1><p class="muted">Catat penjualan produk dan stok akan berkurang otomatis.</p></div>
-        <button id="refreshProductSalesBtn" class="ghost" type="button">Refresh</button>
-      </div>
-
       <div class="card">
-        <h2>Catat Penjualan</h2>
-        <form id="productSaleForm">
-          <label>Produk
-            <select id="saleProductSelect" required></select>
-          </label>
-          <div class="form-grid">
-            <label>Jumlah
-              <input id="saleQuantity" type="number" min="1" step="1" value="1" required>
-            </label>
-            <label>Pembayaran
-              <select id="salePaymentSelect" required>
-                <option value="cash">Cash</option>
-                <option value="qris">QRIS</option>
-                <option value="transfer">Transfer</option>
-              </select>
-            </label>
-          </div>
-          <div id="salePreview" class="sale-preview muted">Pilih produk.</div>
-          <button class="primary" type="submit">Simpan Penjualan</button>
-          <p id="productSaleMessage" class="message"></p>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>Riwayat Penjualan</h2>
-        <div id="productSalesList" class="muted">Memuat...</div>
-      </div>
-    </div>
-      <div class="card">
-        <h2>Riwayat Transaksi Jasa</h2>
+        <h2>Riwayat</h2>
         <div id="transactionList" class="muted">Memuat...</div>
       </div>
     </section>
@@ -215,11 +164,8 @@
           <div class="form-grid">
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
+            <label>Berlaku untuk barber<select id="settingBarberId"><option value="">Semua barber (aturan umum)</option></select><small class="muted">Pilih barber tertentu untuk aturan khusus. Aturan khusus akan diprioritaskan daripada aturan umum.</small></label>
           </div>
-          <label>Aturan untuk barber<select id="settingBarberId" required>
-            <option value="">Pilih barber...</option>
-          </select></label>
-          <p class="muted">Setiap aturan berlaku khusus untuk barber yang dipilih. Aturan baru tidak mengubah snapshot payroll yang sudah dibuat.</p>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
             <option value="profit_share_50_50">Bagi Hasil</option>
@@ -246,6 +192,7 @@
 
       <div class="card">
         <h2>Riwayat Aturan</h2>
+        <p class="muted">Aturan yang dinonaktifkan tidak digunakan untuk payroll baru. Hapus hanya tersedia jika belum ada payroll pada periode aturan tersebut.</p>
         <div id="settingsList" class="muted">Memuat...</div>
       </div>
     </section>
@@ -292,7 +239,41 @@
       </div>
     </section>
 
+    <section id="page-product-sales" class="page" hidden>
+      <div class="page-heading">
+        <div><h1>Penjualan Produk</h1><p class="muted">Catat penjualan produk dan stok akan berkurang otomatis.</p></div>
+        <button id="refreshProductSalesBtn" class="ghost" type="button">Refresh</button>
+      </div>
 
+      <div class="card">
+        <h2>Catat Penjualan</h2>
+        <form id="productSaleForm">
+          <label>Produk
+            <select id="saleProductSelect" required></select>
+          </label>
+          <div class="form-grid">
+            <label>Jumlah
+              <input id="saleQuantity" type="number" min="1" step="1" value="1" required>
+            </label>
+            <label>Pembayaran
+              <select id="salePaymentSelect" required>
+                <option value="cash">Cash</option>
+                <option value="qris">QRIS</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          </div>
+          <div id="salePreview" class="sale-preview muted">Pilih produk.</div>
+          <button class="primary" type="submit">Simpan Penjualan</button>
+          <p id="productSaleMessage" class="message"></p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Riwayat Penjualan</h2>
+        <div id="productSalesList" class="muted">Memuat...</div>
+      </div>
+    </section>
 
     <section id="page-expenses" class="page" hidden>
       <div class="page-heading">
@@ -384,8 +365,8 @@
     <section id="page-barber-report" class="page" hidden>
       <div class="page-heading">
         <div>
-          <h1 id="barberReportTitle">Laporan Pendapatan Barber</h1>
-          <p class="muted">Lihat omzet jasa sesuai periode. Akun barber hanya dapat melihat omzet dan transaksi miliknya sendiri.</p>
+          <h1>Laporan Omzet Barber</h1>
+          <p class="muted">Lihat total omzet jasa per barber berdasarkan hari, minggu, bulan, atau tahun.</p>
         </div>
         <button id="refreshBarberReportBtn" class="ghost" type="button">Refresh</button>
       </div>
@@ -396,6 +377,7 @@
           <label>Periode
             <select id="barberReportPeriod">
               <option value="day">Hari</option>
+              <option value="week">Minggu</option>
               <option value="month">Bulan</option>
               <option value="year">Tahun</option>
             </select>
@@ -404,7 +386,7 @@
             <input id="barberReportDate" type="date" required>
           </label>
         </div>
-        <label id="barberReportBarberLabel">Barber
+        <label>Barber
           <select id="barberReportBarber">
             <option value="">Semua Barber</option>
           </select>
@@ -440,6 +422,7 @@
           <label>Periode
             <select id="financeReportPeriod">
               <option value="day">Hari</option>
+              <option value="week">Minggu</option>
               <option value="month">Bulan</option>
               <option value="year">Tahun</option>
             </select>
