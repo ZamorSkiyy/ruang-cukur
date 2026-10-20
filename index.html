@@ -71,8 +71,8 @@
       </div>
       <div class="stats">
         <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
-        <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
-        <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
+        
+        
         <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
       </div>
       <div class="card">
@@ -179,6 +179,10 @@
             <label>Nama aturan<input id="settingName" required placeholder="Contoh: Gaji Pokok + Bonus 2027"></label>
             <label>Mulai berlaku<input id="settingEffectiveFrom" type="date" required></label>
           </div>
+          <label>Aturan untuk barber<select id="settingBarberId" required>
+            <option value="">Pilih barber...</option>
+          </select></label>
+          <p class="muted">Setiap aturan berlaku khusus untuk barber yang dipilih. Aturan baru tidak mengubah snapshot payroll yang sudah dibuat.</p>
           <label>Metode<select id="settingMethod" required>
             <option value="base_plus_turnover_bonus">Gaji Pokok + Bonus Omzet</option>
             <option value="profit_share_50_50">Bagi Hasil</option>
