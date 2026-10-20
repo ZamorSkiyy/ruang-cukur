@@ -43,3 +43,4 @@ Barber hanya dapat membuat/melihat absensi miliknya sendiri untuk hari ini. Owne
 6. Upload seluruh isi folder ke GitHub/Vercel dan lakukan deployment ulang.
 
 Catatan: uji login kasir, pilihan barber, dan transaksi terlebih dahulu. Kebijakan RLS Supabase yang sudah ada tetap harus mengizinkan kasir membaca daftar profil barber aktif dan menambahkan transaksi; trigger SQL dalam paket memvalidasi identitas pencatat dan barber tujuan.
+\n\n## Pembaruan transaksi dan laporan pendapatan barber\n- Menu Layanan dan Produk hanya tampil untuk owner/admin.\n- Penjualan produk dipindahkan ke halaman Transaksi.\n- Nota transaksi jasa tersedia setelah transaksi tersimpan; penjualan produk membuka dialog cetak setelah berhasil.\n- Barber melihat Pendapatan Saya per bulan berdasarkan data payroll yang sudah dibuat.\n- Uji transaksi, stok, nota, dan payroll di lingkungan staging sebelum digunakan langsung.\n
