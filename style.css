@@ -612,35 +612,3 @@ input:focus, select:focus { border-color: #8c877e; outline: none; }
   padding: 12px 14px;
 }
 .page[hidden] { display: none !important; }
-
-
-/* Kasir: input jasa + produk, cetak nota thermal, dan laporan tutup toko. */
-.print-only { display: none; }
-.receipt { width: 72mm; max-width: 100%; margin: 0 auto; color: #000; font: 12px/1.4 monospace; }
-.receipt h2 { text-align: center; font-size: 18px; margin: 0 0 6px; }
-.receipt p { text-align: center; margin: 4px 0; }
-.receipt-line { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0; }
-.receipt-line small { display: block; font-size: 10px; }
-.receipt-total { display: flex; justify-content: space-between; font-size: 14px; margin: 10px 0; }
-.report-print-header { text-align: center; }
-@media print {
-  @page { size: auto; margin: 6mm; }
-  body.printing-receipt * { visibility: hidden !important; }
-  body.printing-receipt #printReceipt, body.printing-receipt #printReceipt * { visibility: visible !important; }
-  body.printing-receipt #printReceipt { display: block !important; position: absolute; left: 0; top: 0; width: 72mm; padding: 0; margin: 0; }
-  body.printing-report * { visibility: hidden !important; }
-  body.printing-report #page-cashier-report, body.printing-report #page-cashier-report * { visibility: visible !important; }
-  body.printing-report #page-cashier-report { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
-  body.printing-report #page-cashier-report > .card:first-of-type { display: none !important; }
-  body.printing-report .report-print-header { display: block !important; }
-  body.printing-report .list-row { break-inside: avoid; }
-  body.printing-report .stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
-}
-
-
-/* Riwayat transaksi dibatasi tinggi agar tidak memenuhi halaman. */
-.history-scroll { max-height: 420px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding-right: 4px; }
-.history-scroll .list-row { min-width: 0; }
-.history-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.history-actions button { padding: 6px 10px; font-size: 0.85rem; }
-@media (max-width: 600px) { .history-scroll { max-height: 340px; } }

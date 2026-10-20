@@ -17,6 +17,8 @@ const currentPageLabel = $("currentPageLabel");
 const nav = $("nav");
 const navButtons = document.querySelectorAll("[data-page]");
 const statOmzet = $("statOmzet");
+const statBarber = $("statBarber");
+const statOwner = $("statOwner");
 const statCount = $("statCount");
 const recent = $("recent");
 const barberSelect = $("barberSelect");
@@ -25,24 +27,6 @@ const paymentSelect = $("paymentSelect");
 const transactionForm = $("transactionForm");
 const transactionMessage = $("transactionMessage");
 const transactionList = $("transactionList");
-
-// Delegated click handler: remains active when the scrollable history is rerendered.
-if (transactionList && !transactionList.dataset.printHandlerBound) {
-  transactionList.dataset.printHandlerBound = "true";
-  transactionList.addEventListener("click", event => {
-    const button = event.target.closest("button.history-print-service, button.history-print-product");
-    if (!button) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const task = button.classList.contains("history-print-service")
-      ? printServiceTransaction(button.dataset.id)
-      : printProductSale(button.dataset.id);
-    Promise.resolve(task).catch(error => {
-      console.error("Cetak nota gagal:", error);
-      alert("Cetak nota gagal: " + (error?.message || "Terjadi kesalahan. Muat ulang aplikasi dan coba lagi."));
-    });
-  });
-}
 const serviceList = $("serviceList");
 const serviceForm = $("serviceForm");
 const serviceName = $("serviceName");
@@ -102,12 +86,6 @@ const financeProfitTotal = $("financeProfitTotal");
 const financeBreakdown = $("financeBreakdown");
 const financeExpenseCategories = $("financeExpenseCategories");
 const refreshFinanceReportBtn = $("refreshFinanceReportBtn");
-const combinedProductSelect = $("combinedProductSelect");
-const combinedProductQuantity = $("combinedProductQuantity");
-const combinedSalePreview = $("combinedSalePreview");
-const cashierReportDate = $("cashierReportDate");
-const cashierReportMessage = $("cashierReportMessage");
-const cashierReportOutput = $("cashierReportOutput");
 const saleProductSelect = $("saleProductSelect");
 const saleQuantity = $("saleQuantity");
 const salePaymentSelect = $("salePaymentSelect");
@@ -142,8 +120,8 @@ function isCashier() { return currentProfile?.role === "kasir"; }
 function canAccessPage(page) {
   const role = currentProfile?.role;
   if (["owner", "admin"].includes(role)) return true;
-  if (role === "kasir") return ["dashboard", "transactions", "products", "product-sales", "expenses", "cashier-report"].includes(page);
-  if (role === "barber") return !["payroll-settings", "barbers", "barber-report", "finance-report", "payroll", "cashier-report"].includes(page);
+  if (role === "kasir") return ["dashboard", "transactions"].includes(page);
+  if (role === "barber") return !["payroll-settings", "barbers", "finance-report", "payroll"].includes(page);
   return false;
 }
 function setMessage(el, message, error = false) { el.textContent = message || ""; el.classList.toggle("error", error); el.classList.toggle("success", !error && !!message); }
@@ -172,7 +150,6 @@ function showPage(page) {
   if (page === "products") loadProducts();
   if (page === "product-sales") { loadProductsForSale(); loadProductSales(); }
   if (page === "expenses") loadExpenses();
-  if (page === "cashier-report") { if (cashierReportDate && !cashierReportDate.value) cashierReportDate.value = todayLocalISO(); loadCashierReport(); }
   if (page === "barber-report") { populateBarberReportBarbers(); loadBarberReport(); }
   if (page === "finance-report") loadFinanceReport();
 }
@@ -216,16 +193,17 @@ async function loadProfile() {
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
-  barberReportNav.hidden = !isAdmin();
+  barberReportNav.hidden = !isAdmin() && data.role !== "barber";
+  const barberReportBarberLabel = $("barberReportBarberLabel");
+  if (barberReportBarberLabel) barberReportBarberLabel.hidden = data.role === "barber";
   financeReportNav.hidden = !isAdmin();
-  // Kasir dapat membuka Dashboard, Transaksi Jasa, Penjualan Produk, dan Pengeluaran.
+  // Kasir hanya dapat membuka Dashboard dan Transaksi.
   document.querySelectorAll("#nav [data-page]").forEach(button => {
     button.hidden = !canAccessPage(button.dataset.page);
   });
-  productsNav.hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
-  $("productManagerCard").hidden = !isAdmin();
-  $("productSalesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
-  $("expensesNav").hidden = !isAdmin() && !["barber", "kasir"].includes(data.role);
+  productsNav.hidden = !isAdmin() && !["barber"].includes(data.role);
+  $("productSalesNav").hidden = !isAdmin() && data.role !== "barber";
+  $("expensesNav").hidden = !isAdmin() && data.role !== "barber";
   $("attendanceNav").hidden = data.role !== "barber" && !isAdmin();
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
@@ -434,13 +412,12 @@ async function changeBarberStatus(action, barberId, barberName) {
 
   setMessage(barberMessage, isDeactivate ? "Menonaktifkan barber..." : "Mengaktifkan barber...");
   try {
-    const { data, error } = await supabaseClient.rpc("owner_set_barber_status", {
-      p_barber_id: barberId,
-      p_status: isDeactivate ? "inactive" : "active"
+    const { data, error } = await supabaseClient.functions.invoke("manage-barber", {
+      body: { action, barber_id: barberId }
     });
     if (error) throw error;
     if (data?.success === false) throw new Error(data.error || "Operasi gagal.");
-    setMessage(barberMessage, data?.message || (isDeactivate ? "Barber dinonaktifkan." : "Barber berhasil diaktifkan kembali."));
+    setMessage(barberMessage, data?.message || (isDeactivate ? "Barber dinonaktifkan." : "Barber diaktifkan."));
     await loadBarbers();
     await loadBarberManagement();
   } catch (error) {
@@ -555,7 +532,6 @@ function renderProducts() {
     return;
   }
   const actions = isAdmin();
-  const stockActions = isCashier();
   productList.innerHTML = products.map(p => `
     <div class="list-row product-row">
       <div>
@@ -567,43 +543,14 @@ function renderProducts() {
       <div class="service-actions">
         <strong>${rupiah(p.sell_price)}</strong>
         ${actions ? `<div class="button-row">
-          <button class="ghost product-edit-btn" type="button" data-id="${esc(p.id)}">Edit Produk</button>
+          <button class="ghost product-edit-btn" type="button" data-id="${esc(p.id)}">Edit</button>
           <button class="${p.status === "active" ? "danger" : "ghost"} product-status-btn" type="button" data-id="${esc(p.id)}">${p.status === "active" ? "Nonaktifkan" : "Aktifkan"}</button>
-        </div>` : stockActions ? `<div class="button-row">
-          <button class="ghost product-stock-btn" type="button" data-id="${esc(p.id)}">Ubah Stok</button>
         </div>` : ""}
       </div>
     </div>`).join("");
 
   productList.querySelectorAll(".product-edit-btn").forEach(btn => btn.addEventListener("click", () => startEditProduct(btn.dataset.id)));
   productList.querySelectorAll(".product-status-btn").forEach(btn => btn.addEventListener("click", () => toggleProductStatus(btn.dataset.id)));
-  productList.querySelectorAll(".product-stock-btn").forEach(btn => btn.addEventListener("click", () => updateProductStock(btn.dataset.id)));
-}
-
-async function updateProductStock(id) {
-  if (!isCashier()) return;
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-  const answer = prompt(`Stok baru untuk ${product.name}:`, String(Number(product.stock || 0)));
-  if (answer === null) return;
-  const nextStock = Number(answer);
-  if (!Number.isInteger(nextStock) || nextStock < 0) {
-    alert("Stok harus berupa bilangan bulat 0 atau lebih.");
-    return;
-  }
-  try {
-    const { error } = await supabaseClient.rpc("cashier_update_product_stock", {
-      p_product_id: id,
-      p_stock: nextStock
-    });
-    if (error) throw error;
-    setMessage(productMessage, `Stok ${product.name} berhasil diperbarui menjadi ${nextStock}.`);
-    await loadProducts();
-    await loadProductsForSale();
-  } catch (error) {
-    console.error(error);
-    setMessage(productMessage, `Gagal mengubah stok: ${error.message || "Terjadi kesalahan."}`, true);
-  }
 }
 
 async function loadProductsForSale() {
@@ -619,12 +566,6 @@ async function loadProductsForSale() {
     saleProductSelect.innerHTML = saleProducts.length
       ? saleProducts.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — ${rupiah(p.sell_price)} (stok ${Number(p.stock || 0)})</option>`).join("")
       : `<option value="">Tidak ada produk aktif dengan stok</option>`;
-    if (combinedProductSelect) {
-      const previous = combinedProductSelect.value;
-      combinedProductSelect.innerHTML = `<option value="">Tidak ada produk</option>` + saleProducts.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — ${rupiah(p.sell_price)} (stok ${Number(p.stock || 0)})</option>`).join("");
-      if (saleProducts.some(p => p.id === previous)) combinedProductSelect.value = previous;
-      updateCombinedSalePreview(saleProducts);
-    }
     updateSalePreview(saleProducts);
   } catch (error) {
     console.error(error);
@@ -839,66 +780,17 @@ function renderBarberSelect() {
 
 transactionForm.addEventListener("submit", async event => {
   event.preventDefault(); setMessage(transactionMessage, "Menyimpan transaksi...");
-  let serviceSaved = false;
   try {
     if (!canAccessPage("transactions")) throw new Error("Akun ini tidak memiliki izin mencatat transaksi.");
     if (!barberSelect.value) throw new Error("Pilih barber terlebih dahulu.");
     if (currentProfile?.role === "barber" && barberSelect.value !== currentUser.id) throw new Error("Akun barber hanya dapat mencatat transaksi untuk dirinya sendiri.");
     if (!serviceSelect.value) throw new Error("Pilih layanan terlebih dahulu.");
-    const productId = combinedProductSelect?.value || "";
-    const quantity = Number(combinedProductQuantity?.value || 1);
-    if (productId && (!Number.isInteger(quantity) || quantity < 1)) throw new Error("Jumlah produk harus minimal 1.");
-    const service = services.find(x => x.id === serviceSelect.value);
-    const barber = barbers.find(x => x.id === barberSelect.value);
-    const { data: txData, error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id }).select("id, transaction_date, price_snapshot").single();
+    const { error } = await supabaseClient.from("transactions").insert({ barber_id: barberSelect.value, service_id: serviceSelect.value, payment_method: paymentSelect.value, created_by: currentUser.id });
     if (error) throw error;
-    serviceSaved = true;
-    let productLine = null;
-    if (productId) {
-      const { data: beforeProduct, error: beforeProductError } = await supabaseClient.from("products").select("id,name,sell_price,stock,status").eq("id", productId).maybeSingle();
-      if (beforeProductError) throw beforeProductError;
-      if (!beforeProduct || beforeProduct.status !== "active" || Number(beforeProduct.stock || 0) < quantity) throw new Error("Produk tidak tersedia atau stok tidak mencukupi.");
-      const { data, error: productError } = await supabaseClient.rpc("sell_product", { p_product_id: productId, p_quantity: quantity, p_payment_method: paymentSelect.value });
-      if (productError) throw new Error(`Transaksi jasa tersimpan, tetapi penjualan produk gagal: ${productError.message}. Jangan ulangi transaksi jasa; catat produk melalui menu Penjualan Produk.`);
-      if (data?.success === false) throw new Error(`Transaksi jasa tersimpan, tetapi penjualan produk gagal: ${data.message || "gagal"}. Catat produk melalui menu Penjualan Produk.`);
-      productLine = { name: beforeProduct.name || "Produk", quantity, unit_price: Number(beforeProduct.sell_price || 0), total: Number(beforeProduct.sell_price || 0) * quantity };
-    }
-    const receiptLines = [{ name: service?.name || "Layanan", detail: barber?.name || barber?.email || "Barber", quantity: 1, total: Number(txData?.price_snapshot ?? service?.price ?? 0) }];
-    if (productLine) receiptLines.push({ name: productLine.name, detail: `${productLine.quantity} × ${rupiah(productLine.unit_price)}`, quantity: productLine.quantity, total: productLine.total });
     setMessage(transactionMessage, "Transaksi berhasil disimpan.");
-    printReceipt({ title: "NOTA TRANSAKSI", date: txData?.transaction_date || new Date().toISOString(), payment: paymentSelect.value, lines: receiptLines, total: receiptLines.reduce((sum, x) => sum + x.total, 0) });
-    if (combinedProductSelect) combinedProductSelect.value = "";
-    if (combinedProductQuantity) combinedProductQuantity.value = "1";
-    await Promise.all([loadTransactions(), loadDashboard(), loadProductsForSale(), loadProductSales(), loadProducts()]);
-  } catch (error) {
-    console.error(error);
-    setMessage(transactionMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true);
-    if (serviceSaved && combinedProductSelect?.value) setMessage(transactionMessage, `PERHATIAN: jasa sudah tersimpan, tetapi produk mungkin belum. ${error.message || "Periksa penjualan produk sebelum mengulang."}`, true);
-  }
+    await loadTransactions(); await loadDashboard();
+  } catch (error) { console.error(error); setMessage(transactionMessage, `Gagal: ${error.message || "Terjadi kesalahan."}`, true); }
 });
-if (combinedProductSelect) combinedProductSelect.addEventListener("change", async () => {
-  const { data } = await supabaseClient.from("products").select("id,name,sell_price,stock,status").eq("status", "active").gt("stock", 0).order("name");
-  updateCombinedSalePreview(data || []);
-});
-if (combinedProductQuantity) combinedProductQuantity.addEventListener("input", async () => {
-  const { data } = await supabaseClient.from("products").select("id,name,sell_price,stock,status").eq("status", "active").gt("stock", 0).order("name");
-  updateCombinedSalePreview(data || []);
-});
-function updateCombinedSalePreview(items) {
-  if (!combinedSalePreview) return;
-  const p = (items || []).find(x => x.id === combinedProductSelect?.value);
-  combinedSalePreview.textContent = p ? `Tambahan: ${p.name} × ${Math.max(1, Number(combinedProductQuantity?.value || 1))} = ${rupiah(Number(p.sell_price || 0) * Math.max(1, Number(combinedProductQuantity?.value || 1)))} • Stok ${p.stock}` : "Produk opsional: pilih jika pelanggan juga membeli produk.";
-}
-function printReceipt(receipt) {
-  const target = $("printReceipt");
-  if (!target) return;
-  const lines = receipt.lines || [];
-  target.innerHTML = `<div class="receipt"><h2>RUANG CUKUR</h2><p>${esc(receipt.title || "NOTA")}</p><p>${esc(new Date(receipt.date).toLocaleString("id-ID"))}</p><hr>${lines.map(l => `<div class="receipt-line"><div><strong>${esc(l.name)}</strong><small>${esc(l.detail || "")}</small></div><strong>${rupiah(l.total)}</strong></div>`).join("")}<hr><div class="receipt-total"><strong>TOTAL</strong><strong>${rupiah(receipt.total || 0)}</strong></div><p>Pembayaran: ${esc(String(receipt.payment || "").toUpperCase())}</p><p>Terima kasih 🙏</p></div>`;
-  document.body.classList.remove("printing-report"); document.body.classList.add("printing-receipt");
-  window.onafterprint = () => document.body.classList.remove("printing-receipt");
-  window.print();
-}
-
 
 async function getTransactions() {
   const { data, error } = await supabaseClient.from("transactions").select("id, transaction_date, created_at, price_snapshot, barber_share, owner_share, payment_method, barber_id, service_id").order("transaction_date", { ascending: false });
@@ -906,185 +798,18 @@ async function getTransactions() {
 }
 async function loadTransactions() {
   try {
-    // Riwayat menggabungkan transaksi jasa dan penjualan produk.
-    // Penjualan produk disimpan pada product_sales, bukan di transactions.
-    const [transactions, productResult] = await Promise.all([
-      getTransactions(),
-      supabaseClient.from("product_sales")
-        .select("id, sale_date, quantity, unit_price, total_amount, payment_method, product_id, products:product_id(name), profiles:sold_by(name,email)")
-        .order("sale_date", { ascending: false })
-        .limit(100)
-    ]);
-    if (productResult.error) throw productResult.error;
-    const serviceItems = (transactions || []).map(t => {
-      const barber = barbers.find(x => x.id === t.barber_id);
-      const service = services.find(x => x.id === t.service_id);
-      return {
-        kind: "service",
-        timestamp: t.transaction_date || t.created_at,
-        html: `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${new Date(t.transaction_date || t.created_at).toLocaleString("id-ID")}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div><div class="history-actions"><button class="ghost history-edit-service" data-id="${esc(t.id)}" type="button">Edit</button><button class="danger history-delete-service" data-id="${esc(t.id)}" type="button">Hapus</button><button class="ghost history-print-service" data-id="${esc(t.id)}" type="button">Cetak Nota</button></div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`
-      };
-    });
-    const productItems = (productResult.data || []).map(s => ({
-      kind: "product",
-      timestamp: s.sale_date,
-      html: `<div class="list-row"><div><strong>Produk: ${esc(s.products?.name || "Produk")}</strong><div class="muted">${Number(s.quantity || 0)} × ${rupiah(s.unit_price)} • ${new Date(s.sale_date).toLocaleString("id-ID")}</div><div class="muted">${esc(String(s.payment_method || "").toUpperCase())}${s.profiles?.name ? ` • Kasir ${esc(s.profiles.name)}` : ""}</div><div class="history-actions"><button class="ghost history-edit-product" data-id="${esc(s.id)}" type="button">Edit</button><button class="danger history-delete-product" data-id="${esc(s.id)}" type="button">Hapus</button><button class="ghost history-print-product" data-id="${esc(s.id)}" type="button">Cetak Nota</button></div></div><div class="right"><strong>${rupiah(s.total_amount ?? Number(s.unit_price || 0) * Number(s.quantity || 0))}</strong><div class="muted">Penjualan produk</div></div></div>`
-    }));
-    const allItems = [...serviceItems, ...productItems]
-      .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
-      .slice(0, 100);
-    transactionList.innerHTML = allItems.length
-      ? allItems.map(item => item.html).join("")
-      : `<p class="muted">Belum ada transaksi.</p>`;
-    const canEdit = ["owner", "kasir", "barber"].includes(currentProfile?.role);
-    transactionList.querySelectorAll(".history-edit-service, .history-delete-service, .history-edit-product, .history-delete-product").forEach(b => b.hidden = !canEdit);
-    transactionList.querySelectorAll(".history-edit-service").forEach(b => b.addEventListener("click", () => editServiceTransaction(b.dataset.id)));
-    transactionList.querySelectorAll(".history-delete-service").forEach(b => b.addEventListener("click", () => deleteHistoryItem("transactions", b.dataset.id)));
-    transactionList.querySelectorAll(".history-edit-product").forEach(b => b.addEventListener("click", () => editProductSale(b.dataset.id)));
-    transactionList.querySelectorAll(".history-delete-product").forEach(b => b.addEventListener("click", () => deleteHistoryItem("product_sales", b.dataset.id)));
-    const resetBtn = $("resetTransactionsBtn");
-    if (resetBtn) resetBtn.hidden = currentProfile?.role !== "owner";
-  } catch (error) {
-    transactionList.innerHTML = `<p class="error">Gagal memuat riwayat transaksi: ${esc(error.message || "Terjadi kesalahan")}</p>`;
-  }
+    let transactions = await getTransactions();
+    if (currentProfile?.role === "barber") {
+      transactions = transactions.filter(t => t.barber_id === currentUser.id);
+    }
+    transactionList.innerHTML = transactions.length ? transactions.slice(0, 100).map(t => {
+      const barber = barbers.find(x => x.id === t.barber_id); const service = services.find(x => x.id === t.service_id);
+      const date = new Date(t.transaction_date).toLocaleString("id-ID");
+      return `<div class="list-row"><div><strong>${esc(service?.name || "Layanan")}</strong><div class="muted">${esc(barber?.name || barber?.email || "Barber")} • ${date}</div><div class="muted">${esc(String(t.payment_method || "").toUpperCase())}</div></div><div class="right"><strong>${rupiah(t.price_snapshot)}</strong><div class="muted">Barber ${rupiah(t.barber_share)}</div></div></div>`;
+    }).join("") : `<p class="muted">Belum ada transaksi.</p>`;
+  } catch (error) { transactionList.innerHTML = `<p class="error">Gagal memuat transaksi: ${esc(error.message)}</p>`; }
 }
 
-
-function openReceiptWindow() {
-  // Open synchronously from the tap handler so iOS Safari does not block it.
-  let win = null;
-  try {
-    win = window.open("about:blank", "_blank");
-  } catch (error) {
-    console.error("Tidak dapat membuka jendela nota:", error);
-  }
-  if (!win) {
-    alert("Safari tidak membuka halaman nota. Pastikan tombol ditekan langsung, lalu izinkan pop-up untuk ruang-cukur.vercel.app di Pengaturan Safari.");
-    return null;
-  }
-  win.document.open();
-  win.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Nota Ruang Cukur</title>
-  <style>
-  *{box-sizing:border-box}body{font:14px -apple-system,BlinkMacSystemFont,Arial,sans-serif;color:#111;margin:0;padding:12px}
-  .receipt{width:72mm;max-width:100%;margin:0 auto}.center{text-align:center}hr{border:0;border-top:1px dashed #777;margin:10px 0}
-  .line{display:flex;justify-content:space-between;gap:8px;margin:8px 0}.small{font-size:12px;color:#444}.total{font-weight:700;font-size:16px}
-  .actions{display:flex;gap:8px;justify-content:center;margin:16px auto}.actions button{padding:10px 16px;border:0;border-radius:8px;background:#111;color:#fff;font-size:16px}
-  @media print{.actions{display:none}body{padding:0}@page{size:auto;margin:5mm}}
-  </style></head><body><main id="receipt" class="receipt"><p>Memuat nota...</p></main>
-  <div class="actions"><button onclick="window.print()">Cetak Nota</button><button onclick="window.close()">Tutup</button></div>
-  </body></html>`);
-  win.document.close();
-  return win;
-}
-function fillReceiptWindow(win, receipt) {
-  const lines = receipt.lines || [];
-  const root = win.document.getElementById("receipt");
-  if (!root) return;
-  root.innerHTML = `<div class="center"><h2>RUANG CUKUR</h2><strong>${esc(receipt.title || "NOTA TRANSAKSI")}</strong><p>${esc(new Date(receipt.date || Date.now()).toLocaleString("id-ID"))}</p></div><hr>
-    ${lines.map(l => `<div class="line"><div><strong>${esc(l.name || "")}</strong><div class="small">${esc(l.detail || "")}</div></div><strong>${rupiah(l.total || 0)}</strong></div>`).join("")}
-    <hr><div class="line total"><span>TOTAL</span><span>${rupiah(receipt.total || 0)}</span></div><p>Pembayaran: ${esc(String(receipt.payment || "").toUpperCase())}</p><hr><p class="center">Terima kasih telah berkunjung 🙏</p>`;
-}
-async function printServiceTransaction(id) {
-  const printWindow = openReceiptWindow();
-  if (!printWindow) return;
-  const { data: row, error } = await supabaseClient.from("transactions")
-    .select("id, transaction_date, created_at, price_snapshot, payment_method, barber_id, service_id")
-    .eq("id", id).single();
-  if (error) {
-    printWindow.close();
-    alert("Gagal memuat nota: " + error.message);
-    return;
-  }
-  const service = services.find(x => x.id === row.service_id);
-  const barber = barbers.find(x => x.id === row.barber_id);
-  fillReceiptWindow(printWindow, {
-    title: "NOTA TRANSAKSI JASA",
-    date: row.transaction_date || row.created_at,
-    payment: row.payment_method,
-    lines: [{ name: service?.name || "Layanan", detail: `Barber: ${barber?.name || barber?.email || "Barber"}`, total: Number(row.price_snapshot || 0) }],
-    total: Number(row.price_snapshot || 0)
-  });
-  printWindow.focus();
-}
-async function printProductSale(id) {
-  const printWindow = openReceiptWindow();
-  if (!printWindow) return;
-  const { data: row, error } = await supabaseClient.from("product_sales")
-    .select("id, sale_date, quantity, unit_price, total_amount, payment_method, products(name)")
-    .eq("id", id).single();
-  if (error) {
-    printWindow.close();
-    alert("Gagal memuat nota produk: " + error.message);
-    return;
-  }
-  const total = Number(row.total_amount ?? Number(row.unit_price || 0) * Number(row.quantity || 0));
-  fillReceiptWindow(printWindow, {
-    title: "NOTA PENJUALAN PRODUK",
-    date: row.sale_date,
-    payment: row.payment_method,
-    lines: [{ name: row.products?.name || "Produk", detail: `${Number(row.quantity || 0)} × ${rupiah(row.unit_price)}`, total }],
-    total
-  });
-  printWindow.focus();
-}
-
-function canCorrectTransactions() { return ["owner", "kasir", "barber"].includes(currentProfile?.role); }
-async function editServiceTransaction(id) {
-  if (!canCorrectTransactions()) return;
-  const { data: row, error } = await supabaseClient.from("transactions").select("id, service_id, barber_id, payment_method").eq("id", id).single();
-  if (error) { alert("Gagal membaca transaksi: " + error.message); return; }
-  const currentService = services.find(x => x.id === row.service_id);
-  const serviceName = prompt("Nama layanan baru (ketik persis):\n" + services.map(x => x.name).join("\n"), currentService?.name || "");
-  if (serviceName === null) return;
-  const service = services.find(x => x.name.toLowerCase() === serviceName.trim().toLowerCase());
-  if (!service) { alert("Nama layanan tidak cocok dengan daftar layanan."); return; }
-  let barber = barbers.find(x => x.id === row.barber_id);
-  if (currentProfile?.role === "owner") {
-    const barberName = prompt("Nama barber baru (ketik persis):\n" + barbers.map(x => x.name || x.email).join("\n"), barber?.name || barber?.email || "");
-    if (barberName === null) return;
-    barber = barbers.find(x => (x.name || x.email || "").toLowerCase() === barberName.trim().toLowerCase());
-    if (!barber) { alert("Nama barber tidak cocok."); return; }
-  }
-  const payment = prompt("Metode pembayaran: cash, qris, atau transfer", row.payment_method || "cash");
-  if (payment === null) return;
-  if (!["cash", "qris", "transfer"].includes(payment.trim().toLowerCase())) { alert("Metode pembayaran tidak valid."); return; }
-  const { error: updateError } = await supabaseClient.from("transactions").update({ service_id: service.id, barber_id: barber.id, payment_method: payment.trim().toLowerCase() }).eq("id", id);
-  if (updateError) { alert("Gagal mengedit transaksi: " + updateError.message); return; }
-  alert("Transaksi diperbarui. Periksa nilai harga dan pembagian barber/owner sebelum menutup laporan.");
-  await Promise.all([loadTransactions(), loadDashboard()]);
-}
-async function editProductSale(id) {
-  if (!canCorrectTransactions()) return;
-  const { data: row, error } = await supabaseClient.from("product_sales").select("id, quantity, unit_price, payment_method").eq("id", id).single();
-  if (error) { alert("Gagal membaca penjualan produk: " + error.message); return; }
-  const q = prompt("Jumlah produk baru:", String(row.quantity));
-  if (q === null) return;
-  const quantity = Number(q);
-  if (!Number.isInteger(quantity) || quantity < 1) { alert("Jumlah harus bilangan bulat minimal 1."); return; }
-  const payment = prompt("Metode pembayaran: cash, qris, atau transfer", row.payment_method || "cash");
-  if (payment === null) return;
-  if (!["cash", "qris", "transfer"].includes(payment.trim().toLowerCase())) { alert("Metode pembayaran tidak valid."); return; }
-  const { error: updateError } = await supabaseClient.from("product_sales").update({ quantity, total_amount: quantity * Number(row.unit_price), payment_method: payment.trim().toLowerCase() }).eq("id", id);
-  if (updateError) { alert("Gagal mengedit penjualan produk: " + updateError.message); return; }
-  alert("Penjualan produk diperbarui. Periksa stok barang setelah koreksi.");
-  await Promise.all([loadTransactions(), loadDashboard(), loadProducts()]);
-}
-async function deleteHistoryItem(table, id) {
-  if (!canCorrectTransactions()) return;
-  if (!confirm("Yakin menghapus transaksi ini? Stok produk perlu diperiksa setelah menghapus penjualan.")) return;
-  const { error } = await supabaseClient.from(table).delete().eq("id", id);
-  if (error) { alert("Gagal menghapus transaksi: " + error.message); return; }
-  await Promise.all([loadTransactions(), loadDashboard(), loadProducts(), loadProductSales()]);
-}
-async function resetAllTransactions() {
-  if (currentProfile?.role !== "owner") return;
-  const confirmation = prompt('RESET SEMUA TRANSAKSI akan menghapus transaksi jasa dan penjualan produk. Layanan, produk, akun, pengeluaran dan payroll tidak dihapus. Ketik RESET untuk melanjutkan.');
-  if (confirmation !== "RESET") return;
-  const { error } = await supabaseClient.rpc("owner_reset_transactions");
-  if (error) { alert("Reset gagal: " + error.message); return; }
-  alert("Transaksi jasa dan penjualan produk berhasil direset.");
-  await Promise.all([loadTransactions(), loadDashboard(), loadProductSales(), loadProducts()]);
-}
 
 // Manajemen akun kasir menggunakan Edge Function dengan validasi role Owner/Admin di server.
 const ownerCashierTools = $("ownerCashierTools");
@@ -1113,32 +838,6 @@ if (cashierForm) cashierForm.addEventListener("submit", async (event) => {
   }
 });
 
-async function loadCashierReport() {
-  if (!cashierReportDate?.value) return;
-  setMessage(cashierReportMessage, "Memuat laporan...");
-  cashierReportOutput.innerHTML = "Memuat...";
-  try {
-    const date = cashierReportDate.value;
-    const [{ data: tx, error: txErr }, { data: ps, error: psErr }, { data: ex, error: exErr }] = await Promise.all([
-      supabaseClient.from("transactions").select("id,transaction_date,price_snapshot,payment_method,barber_id,service_id").gte("transaction_date", `${date}T00:00:00`).lt("transaction_date", `${date}T23:59:59.999`).order("transaction_date"),
-      supabaseClient.from("product_sales").select("id,sale_date,quantity,unit_price,total_amount,payment_method,product_id,products:product_id(name)").gte("sale_date", `${date}T00:00:00`).lt("sale_date", `${date}T23:59:59.999`).order("sale_date"),
-      supabaseClient.from("expenses").select("id,expense_date,category,description,amount,payment_method").eq("expense_date", date).order("created_at")
-    ]);
-    if (txErr) throw txErr; if (psErr) throw psErr; if (exErr) throw exErr;
-    const servicesTotal = (tx || []).reduce((a,x)=>a+Number(x.price_snapshot||0),0);
-    const productsTotal = (ps || []).reduce((a,x)=>a+Number(x.total_amount||Number(x.unit_price||0)*Number(x.quantity||0)),0);
-    const expensesTotal = (ex || []).reduce((a,x)=>a+Number(x.amount||0),0);
-    const salesCount = (tx||[]).length + (ps||[]).length;
-    const serviceRows = (tx||[]).map(x=>{const b=barbers.find(y=>y.id===x.barber_id), v=services.find(y=>y.id===x.service_id); return `<div class="list-row"><div><strong>Jasa: ${esc(v?.name||"Layanan")}</strong><div class="muted">${esc(b?.name||b?.email||"Barber")} • ${new Date(x.transaction_date).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})} • ${esc(String(x.payment_method||"").toUpperCase())}</div></div><strong>${rupiah(x.price_snapshot)}</strong></div>`;});
-    const productRows = (ps||[]).map(x=>{const prod=products.find(y=>y.id===x.product_id); return `<div class="list-row"><div><strong>Produk: ${esc(x.products?.name||prod?.name||"Produk")}</strong><div class="muted">${Number(x.quantity||0)} × ${rupiah(x.unit_price)} • ${new Date(x.sale_date).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})} • ${esc(String(x.payment_method||"").toUpperCase())}</div></div><strong>${rupiah(x.total_amount||Number(x.unit_price||0)*Number(x.quantity||0))}</strong></div>`;});
-    const expenseRows = (ex||[]).map(x=>`<div class="list-row"><div><strong>${esc(x.category)}</strong><div class="muted">${esc(x.description||"")} • ${esc(String(x.payment_method||"").toUpperCase())}</div></div><strong>− ${rupiah(x.amount)}</strong></div>`);
-    cashierReportOutput.innerHTML = `<div class="report-print-header"><h2>RUANG CUKUR — LAPORAN TUTUP TOKO</h2><p>Tanggal: ${esc(date)}</p></div><div class="stats"><div class="stat"><span>Omzet jasa</span><b>${rupiah(servicesTotal)}</b></div><div class="stat"><span>Penjualan produk</span><b>${rupiah(productsTotal)}</b></div><div class="stat"><span>Total penjualan</span><b>${rupiah(servicesTotal+productsTotal)}</b></div><div class="stat"><span>Pengeluaran</span><b>${rupiah(expensesTotal)}</b></div></div><h3>Transaksi Jasa (${(tx||[]).length})</h3>${serviceRows.join("")||'<p class="muted">Tidak ada transaksi jasa.</p>'}<h3>Penjualan Produk (${(ps||[]).length})</h3>${productRows.join("")||'<p class="muted">Tidak ada penjualan produk.</p>'}<h3>Pengeluaran (${(ex||[]).length})</h3>${expenseRows.join("")||'<p class="muted">Tidak ada pengeluaran.</p>'}<hr><div class="list-row"><strong>Penjualan bersih setelah pengeluaran (sebelum biaya lain)</strong><strong>${rupiah(servicesTotal+productsTotal-expensesTotal)}</strong></div><p class="muted">Jumlah catatan penjualan: ${salesCount}. Laporan ini menggabungkan catatan jasa, produk, dan pengeluaran yang tersimpan pada tanggal tersebut.</p>`;
-    setMessage(cashierReportMessage, `Laporan ${date} berhasil dimuat.`);
-  } catch(error) { cashierReportOutput.innerHTML = `<p class="error">Gagal memuat laporan: ${esc(error.message||"Terjadi kesalahan")}</p>`; setMessage(cashierReportMessage, "Periksa izin SELECT untuk transactions, product_sales, dan expenses.", true); }
-}
-$("loadCashierReportBtn")?.addEventListener("click", loadCashierReport);
-$("printCashierReportBtn")?.addEventListener("click", () => { if (!cashierReportOutput?.textContent.trim() || cashierReportOutput.textContent.includes("Memuat")) { setMessage(cashierReportMessage,"Tampilkan laporan terlebih dahulu.",true); return; } document.body.classList.remove("printing-receipt"); document.body.classList.add("printing-report"); window.onafterprint = () => document.body.classList.remove("printing-report"); window.print(); });
-
 async function loadDashboard() {
   if (ownerCashierTools) ownerCashierTools.hidden = !isAdmin();
   try {
@@ -1147,7 +846,7 @@ async function loadDashboard() {
     const omzet = today.reduce((a,t) => a + Number(t.price_snapshot || 0), 0);
     const barber = today.reduce((a,t) => a + Number(t.barber_share || 0), 0);
     const owner = today.reduce((a,t) => a + Number(t.owner_share || 0), 0);
-    statOmzet.textContent = rupiah(omzet); statCount.textContent = today.length;
+    statOmzet.textContent = rupiah(omzet); statBarber.textContent = rupiah(barber); statOwner.textContent = rupiah(owner); statCount.textContent = today.length;
     recent.innerHTML = today.length ? today.slice(0,5).map(t => { const b=barbers.find(x=>x.id===t.barber_id), s=services.find(x=>x.id===t.service_id); return `<div class="list-row"><div><strong>${esc(s?.name || "Layanan")}</strong><div class="muted">${esc(b?.name || b?.email || "Barber")}</div></div><strong>${rupiah(t.price_snapshot)}</strong></div>`; }).join("") : `<p class="muted">Belum ada transaksi hari ini.</p>`;
   } catch (error) { recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`; }
 }
@@ -1468,18 +1167,23 @@ function formatReportRange(period, range) {
 
 function populateBarberReportBarbers() {
   if (!barberReportBarber) return;
+  if (currentProfile?.role === "barber") {
+    const own = barbers.find(b => b.id === currentUser?.id);
+    barberReportBarber.innerHTML = `<option value="${esc(currentUser?.id || "")}">${esc(own?.name || own?.email || currentProfile?.name || "Omzet saya")}</option>`;
+    barberReportBarber.value = currentUser?.id || "";
+    barberReportBarber.disabled = true;
+    return;
+  }
+  barberReportBarber.disabled = false;
   const previous = barberReportBarber.value;
   barberReportBarber.innerHTML =
     `<option value="">Semua Barber</option>` +
     barbers.map(b => `<option value="${esc(b.id)}">${esc(b.name || b.email || "Barber")}</option>`).join("");
-
-  if (previous && barbers.some(b => b.id === previous)) {
-    barberReportBarber.value = previous;
-  }
+  if (previous && barbers.some(b => b.id === previous)) barberReportBarber.value = previous;
 }
 
 async function loadBarberReport() {
-  if (!isAdmin()) return;
+  if (!isAdmin() && currentProfile?.role !== "barber") return;
   if (!barberReportDate.value) barberReportDate.value = localDateValue();
 
   setMessage(barberReportMessage, "Memuat laporan...");
@@ -1487,7 +1191,9 @@ async function loadBarberReport() {
   try {
     const period = barberReportPeriod.value || "month";
     const range = getReportRange(period, barberReportDate.value);
-    const selectedBarberId = barberReportBarber.value || "";
+    const selectedBarberId = currentProfile?.role === "barber"
+      ? currentUser?.id
+      : (barberReportBarber.value || "");
 
     const transactions = await getTransactions();
     const filtered = transactions.filter(t => {
@@ -1498,7 +1204,9 @@ async function loadBarberReport() {
     });
 
     const grouped = new Map();
-    barbers.forEach(b => grouped.set(b.id, {
+    (currentProfile?.role === "barber"
+      ? barbers.filter(b => b.id === currentUser?.id)
+      : barbers).forEach(b => grouped.set(b.id, {
       id: b.id,
       name: b.name || b.email || "Barber",
       count: 0,

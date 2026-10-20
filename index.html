@@ -48,7 +48,6 @@
       <button data-page="products" type="button" id="productsNav">Produk</button>
       <button data-page="product-sales" type="button" id="productSalesNav">Penjualan Produk</button>
       <button data-page="expenses" type="button" id="expensesNav">Pengeluaran</button>
-      <button data-page="cashier-report" type="button" id="cashierReportNav">Laporan Tutup Toko</button>
       <button data-page="barber-report" type="button" id="barberReportNav">Laporan Omzet</button>
       <button data-page="finance-report" type="button" id="financeReportNav">Laporan Keuangan</button>
     </nav>
@@ -72,6 +71,8 @@
       </div>
       <div class="stats">
         <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
+        <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
+        <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
         <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
       </div>
       <div class="card">
@@ -86,9 +87,6 @@
       <form id="transactionForm" class="card">
         <label>Barber<select id="barberSelect" required></select></label>
         <label>Layanan<select id="serviceSelect" required></select></label>
-        <label>Tambahan produk (opsional)<select id="combinedProductSelect"><option value="">Tidak ada produk</option></select></label>
-        <label>Jumlah produk (opsional)<input id="combinedProductQuantity" type="number" min="1" step="1" value="1"></label>
-        <p id="combinedSalePreview" class="muted">Pilih produk jika pelanggan juga membeli produk.</p>
         <label>Pembayaran<select id="paymentSelect" required>
           <option value="cash">Cash</option>
           <option value="qris">QRIS</option>
@@ -98,9 +96,8 @@
         <p id="transactionMessage" class="message"></p>
       </form>
       <div class="card">
-        <div class="page-heading"><h2>Riwayat</h2><button id="resetTransactionsBtn" class="danger" type="button" hidden onclick="resetAllTransactions()">Reset Semua Transaksi</button></div>
-        <p class="muted">Daftar dibatasi tinggi dan dapat digulir.</p>
-        <div id="transactionList" class="muted history-scroll">Memuat...</div>
+        <h2>Riwayat</h2>
+        <div id="transactionList" class="muted">Memuat...</div>
       </div>
     </section>
 
@@ -290,17 +287,6 @@
       </div>
     </section>
 
-
-    <section id="page-cashier-report" class="page" hidden>
-      <div class="page-heading"><div><h1>Laporan Tutup Toko</h1><p class="muted">Rekap transaksi jasa, produk, dan pengeluaran untuk tanggal yang dipilih.</p></div></div>
-      <div class="card">
-        <label>Tanggal laporan<input id="cashierReportDate" type="date" required></label>
-        <div class="button-row"><button id="loadCashierReportBtn" class="primary" type="button">Tampilkan Rekap</button><button id="printCashierReportBtn" class="ghost" type="button">Print Laporan</button></div>
-        <p id="cashierReportMessage" class="message"></p>
-      </div>
-      <div id="cashierReportOutput" class="card"><p class="muted">Pilih tanggal lalu tekan Tampilkan Rekap.</p></div>
-    </section>
-
     <section id="page-expenses" class="page" hidden>
       <div class="page-heading">
         <div><h1>Pengeluaran</h1><p class="muted">Catat biaya operasional Ruang Cukur.</p></div>
@@ -392,7 +378,7 @@
       <div class="page-heading">
         <div>
           <h1>Laporan Omzet Barber</h1>
-          <p class="muted">Lihat total omzet jasa per barber berdasarkan hari, minggu, bulan, atau tahun.</p>
+          <p class="muted">Lihat omzet jasa sesuai periode. Akun barber hanya dapat melihat omzet dan transaksi miliknya sendiri.</p>
         </div>
         <button id="refreshBarberReportBtn" class="ghost" type="button">Refresh</button>
       </div>
@@ -403,7 +389,6 @@
           <label>Periode
             <select id="barberReportPeriod">
               <option value="day">Hari</option>
-              <option value="week">Minggu</option>
               <option value="month">Bulan</option>
               <option value="year">Tahun</option>
             </select>
@@ -412,7 +397,7 @@
             <input id="barberReportDate" type="date" required>
           </label>
         </div>
-        <label>Barber
+        <label id="barberReportBarberLabel">Barber
           <select id="barberReportBarber">
             <option value="">Semua Barber</option>
           </select>
@@ -448,7 +433,6 @@
           <label>Periode
             <select id="financeReportPeriod">
               <option value="day">Hari</option>
-              <option value="week">Minggu</option>
               <option value="month">Bulan</option>
               <option value="year">Tahun</option>
             </select>
