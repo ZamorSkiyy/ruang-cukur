@@ -186,7 +186,6 @@ async function loadProfile() {
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
-  productsNav.hidden = false;
 }
 logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
 
