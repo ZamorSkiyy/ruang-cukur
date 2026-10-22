@@ -182,12 +182,16 @@ async function loadProfile() {
     throw new Error("Akun barber ini sedang nonaktif. Hubungi Owner/Admin.");
   }
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
+  const isBarberAccount = String(data.role || "").toLowerCase() === "barber";
+  if (menuToggle) menuToggle.hidden = isBarberAccount;
+  if (currentPageLabel) currentPageLabel.hidden = isBarberAccount;
+  if (nav) nav.hidden = true;
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
 }
-logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
+logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; if (menuToggle) menuToggle.hidden = false; if (currentPageLabel) currentPageLabel.hidden = false; showLogin(); });
 
 async function loadServices() {
   const { data, error } = await supabaseClient
@@ -814,15 +818,148 @@ async function loadTransactions() {
 }
 
 async function loadDashboard() {
+  const role = String(currentProfile?.role || "").toLowerCase();
+  const isCashier = ["kasir", "cashier"].includes(role);
+  const isBarberAccount = role === "barber";
+  const defaultDashboard = $("dashboardDefault");
+  const cashierDashboard = $("cashierDashboard");
+  const barberDashboard = $("barberDashboard");
+  if (defaultDashboard) defaultDashboard.hidden = isCashier || isBarberAccount;
+  if (cashierDashboard) cashierDashboard.hidden = !isCashier;
+  if (barberDashboard) barberDashboard.hidden = !isBarberAccount;
+
   try {
-    const transactions = await getTransactions(); const now = new Date();
-    const today = transactions.filter(t => { const d = new Date(t.transaction_date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate(); });
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthStartISO = todayLocalISODate(monthStart);
+    const nextMonthISO = todayLocalISODate(nextMonth);
+    const isTodayTimestamp = value => {
+      if (!value) return false;
+      const d = new Date(value);
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    };
+    const isTodayDate = value => String(value || "").slice(0, 10) === todayLocalISO();
+
+    if (isBarberAccount) {
+      const barberId = currentUser?.id;
+      if (!barberId) throw new Error("Akun barber tidak teridentifikasi.");
+      const [{ data: rules, error: rulesError }, { data: txRows, error: txError }, { data: attendanceRows, error: attendanceError }, { data: allBarbers, error: barberCountError }] = await Promise.all([
+        supabaseClient.from("payroll_settings").select("id,name,barber_id,method,base_salary,turnover_threshold,bonus_rate,barber_share_rate,owner_share_rate,daily_rate,commission_rate,effective_from,effective_to,status,created_at").eq("status", "active").lt("effective_from", nextMonthISO).or(`effective_to.is.null,effective_to.gte.${monthStartISO}`).order("effective_from", { ascending: false }).order("created_at", { ascending: false }),
+        supabaseClient.from("transactions").select("id,barber_id,transaction_date,price_snapshot,barber_share").eq("barber_id", barberId).gte("transaction_date", monthStart.toISOString()).lt("transaction_date", nextMonth.toISOString()),
+        supabaseClient.from("barber_attendance").select("id,barber_id,attendance_date,present").eq("barber_id", barberId).eq("present", true).gte("attendance_date", monthStartISO).lt("attendance_date", nextMonthISO),
+        supabaseClient.from("profiles").select("id").eq("role", "barber").eq("status", "active")
+      ]);
+      if (rulesError) throw new Error(`Aturan gaji: ${rulesError.message}`);
+      if (txError) throw new Error(`Transaksi: ${txError.message}`);
+      if (attendanceError) throw new Error(`Absensi: ${attendanceError.message}`);
+      if (barberCountError) throw new Error(`Data barber: ${barberCountError.message}`);
+
+      const applicableRules = (rules || []).filter(r => !r.effective_to || String(r.effective_to).slice(0,10) >= monthStartISO);
+      const rule = applicableRules.find(r => r.barber_id === barberId) || applicableRules.find(r => !r.barber_id);
+      if (!rule) throw new Error("Belum ada aturan payroll aktif yang berlaku untuk akun ini.");
+
+      const effectiveFrom = rule.method === "daily_plus_commission" && String(rule.effective_from).slice(0,10) > monthStartISO ? String(rule.effective_from).slice(0,10) : monthStartISO;
+      const transactions = (txRows || []).filter(t => String(t.transaction_date).slice(0,10) >= effectiveFrom);
+      const attendance = (attendanceRows || []).filter(a => String(a.attendance_date).slice(0,10) >= effectiveFrom);
+      const customerCount = transactions.length;
+      const attendanceDays = attendance.length;
+      const turnover = transactions.reduce((sum,t) => sum + Number(t.price_snapshot || 0), 0);
+      const barberShare = transactions.reduce((sum,t) => sum + Number(t.barber_share || 0), 0);
+      let income = 0, methodLabel = "", breakdown = [];
+
+      if (rule.method === "profit_share_50_50") {
+        const barberRate = Number(rule.barber_share_rate ?? 0.5);
+        income = turnover * barberRate;
+        methodLabel = `Bagi hasil (${(barberRate * 100).toLocaleString("id-ID")}% bagian barber)`;
+        breakdown = [
+          `<div class="list-row"><span>Omzet jasa bulan ini</span><strong>${rupiah(turnover)}</strong></div>`,
+          `<div class="list-row"><span>Bagian barber (${(Number(rule.barber_share_rate ?? 0.5) * 100).toLocaleString("id-ID")}% × omzet)</span><strong>${rupiah(income)}</strong></div>`
+        ];
+      } else if (rule.method === "daily_plus_commission") {
+        const dailyRate = Number(rule.daily_rate || 60000), commissionRate = Number(rule.commission_rate || 8000);
+        const dailyPay = attendanceDays * dailyRate, commission = customerCount * commissionRate;
+        income = dailyPay + commission;
+        methodLabel = "Gaji harian + komisi per pelanggan";
+        breakdown = [
+          `<div class="list-row"><span>${attendanceDays} hari hadir × ${rupiah(dailyRate)}</span><strong>${rupiah(dailyPay)}</strong></div>`,
+          `<div class="list-row"><span>${customerCount} pelanggan × ${rupiah(commissionRate)}</span><strong>${rupiah(commission)}</strong></div>`
+        ];
+      } else if (rule.method === "base_plus_turnover_bonus") {
+        const baseSalary = Number(rule.base_salary || 0), threshold = Number(rule.turnover_threshold || 0), bonusRate = Number(rule.bonus_rate || 0);
+        let bonus = 0;
+        if (rule.barber_id) {
+          bonus = Math.max(turnover - threshold, 0) * bonusRate;
+          methodLabel = "Gaji pokok + bonus omzet pribadi";
+        } else {
+          const { data: globalRows, error: globalError } = await supabaseClient.from("transactions").select("id,transaction_date,price_snapshot").gte("transaction_date", monthStart.toISOString()).lt("transaction_date", nextMonth.toISOString());
+          if (globalError) throw new Error(`Omzet toko: ${globalError.message}`);
+          const globalTurnover = (globalRows || []).reduce((sum,t) => sum + Number(t.price_snapshot || 0), 0);
+          const pool = Math.max(globalTurnover - threshold, 0) * bonusRate;
+          bonus = pool / Math.max((allBarbers || []).length, 1);
+          methodLabel = "Gaji pokok + bagian bonus omzet toko";
+        }
+        income = baseSalary + bonus;
+        breakdown = [
+          `<div class="list-row"><span>Gaji pokok</span><strong>${rupiah(baseSalary)}</strong></div>`,
+          `<div class="list-row"><span>Omzet jasa barber</span><strong>${rupiah(turnover)}</strong></div>`,
+          `<div class="list-row"><span>Ambang bonus omzet</span><strong>${rupiah(threshold)}</strong></div>`,
+          `<div class="list-row"><span>Bonus omzet (${(bonusRate*100).toLocaleString("id-ID")}% sesuai aturan)</span><strong>${rupiah(bonus)}</strong></div>`
+        ];
+      } else {
+        throw new Error("Metode payroll tidak dikenali.");
+      }
+
+      $("barberIncomeTotal").textContent = rupiah(income);
+      $("barberPayrollMethod").textContent = `${methodLabel} • Periode ${monthLabel(monthStartISO)}`;
+      $("barberCustomerCount").textContent = String(customerCount);
+      $("barberAttendanceDays").textContent = String(attendanceDays);
+      $("barberIncomeBreakdown").innerHTML = breakdown.join("");
+      return;
+    }
+
+    if (isCashier) {
+      const [
+        { data: serviceRows, error: serviceError },
+        { data: productRows, error: productError },
+        { data: expenseRows, error: expenseError }
+      ] = await Promise.all([
+        supabaseClient.from("transactions").select("id, transaction_date, price_snapshot"),
+        supabaseClient.from("product_sales").select("id, sale_date, total_amount"),
+        supabaseClient.from("expenses").select("id, expense_date, amount")
+      ]);
+      if (serviceError) throw serviceError;
+      if (productError) throw productError;
+      if (expenseError) throw expenseError;
+      const serviceIncome = (serviceRows || []).filter(t => isTodayTimestamp(t.transaction_date)).reduce((sum, t) => sum + Number(t.price_snapshot || 0), 0);
+      const productIncome = (productRows || []).filter(s => isTodayTimestamp(s.sale_date)).reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+      const expenseTotal = (expenseRows || []).filter(e => isTodayDate(e.expense_date)).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      $("cashierServiceIncome").textContent = rupiah(serviceIncome);
+      $("cashierProductIncome").textContent = rupiah(productIncome);
+      $("cashierIncomeTotal").textContent = rupiah(serviceIncome + productIncome);
+      $("cashierExpenseTotal").textContent = rupiah(expenseTotal);
+      return;
+    }
+
+    const transactions = await getTransactions();
+    const today = transactions.filter(t => isTodayTimestamp(t.transaction_date));
     const omzet = today.reduce((a,t) => a + Number(t.price_snapshot || 0), 0);
     const barber = today.reduce((a,t) => a + Number(t.barber_share || 0), 0);
     const owner = today.reduce((a,t) => a + Number(t.owner_share || 0), 0);
     statOmzet.textContent = rupiah(omzet); statBarber.textContent = rupiah(barber); statOwner.textContent = rupiah(owner); statCount.textContent = today.length;
     recent.innerHTML = today.length ? today.slice(0,5).map(t => { const b=barbers.find(x=>x.id===t.barber_id), s=services.find(x=>x.id===t.service_id); return `<div class="list-row"><div><strong>${esc(s?.name || "Layanan")}</strong><div class="muted">${esc(b?.name || b?.email || "Barber")}</div></div><strong>${rupiah(t.price_snapshot)}</strong></div>`; }).join("") : `<p class="muted">Belum ada transaksi hari ini.</p>`;
-  } catch (error) { recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`; }
+  } catch (error) {
+    console.error("Gagal memuat dashboard:", error);
+    const message = `<p class="error">Gagal memuat dashboard: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+    if (isBarberAccount && $("barberIncomeBreakdown")) $("barberIncomeBreakdown").innerHTML = message;
+    else if (isCashier && $("cashierDashboard")) $("cashierDashboard").innerHTML += message;
+    else recent.innerHTML = message;
+  }
+}
+
+function todayLocalISODate(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 10);
 }
 
 function monthLabel(value) { return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`)); }
@@ -981,7 +1118,28 @@ async function initAttendance() {
     attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
     attendanceBarber.closest("label").hidden = false;
     attendancePresent.closest("label").hidden = false;
-    attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+
+    // Ambil profil barber khusus untuk absensi, termasuk barber nonaktif
+    // agar admin tetap dapat mencatat/melihat riwayat kehadiran.
+    attendanceBarber.innerHTML = `<option value="">Memuat daftar barber...</option>`;
+    try {
+      const { data, error } = await supabaseClient
+        .from("profiles")
+        .select("id,name,email,role,status")
+        .eq("role", "barber")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      const attendanceBarbers = data || [];
+      attendanceBarber.innerHTML = attendanceBarbers.length
+        ? `<option value="">Pilih barber</option>` + attendanceBarbers.map(b =>
+            `<option value="${b.id}">${esc(b.name || b.email || "Barber")}${b.status === "inactive" ? " (Nonaktif)" : ""}</option>`
+          ).join("")
+        : `<option value="">Belum ada akun barber</option>`;
+    } catch (error) {
+      console.error("Gagal memuat daftar barber untuk absensi:", error);
+      attendanceBarber.innerHTML = `<option value="">Gagal memuat daftar barber</option>`;
+      if (attendanceMessage) setMessage(attendanceMessage, `Daftar barber gagal dimuat: ${error.message || "Periksa izin akses profiles."}`, true);
+    }
   }
 }
 async function loadAttendance() {
