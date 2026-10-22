@@ -116,6 +116,7 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 }
 function isAdmin() { return ["owner", "admin"].includes(currentProfile?.role); }
+function canManageAttendance() { return isAdmin() || ["kasir", "cashier"].includes(String(currentProfile?.role || "").toLowerCase()); }
 function setMessage(el, message, error = false) { el.textContent = message || ""; el.classList.toggle("error", error); el.classList.toggle("success", !error && !!message); }
 function showLogin() { loginView.hidden = false; appView.hidden = true; }
 function showApp() { loginView.hidden = true; appView.hidden = false; }
@@ -1068,7 +1069,7 @@ async function initAttendance() {
     if (attendanceNotes) attendanceNotes.placeholder = "Catatan opsional";
     const submitBtn = document.querySelector('#attendanceForm button[type="submit"]');
     if (submitBtn) submitBtn.textContent = "Absen Hadir Hari Ini";
-  } else if (isAdmin()) {
+  } else if (canManageAttendance()) {
     if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
     attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
     attendanceBarber.closest("label").hidden = false;
@@ -1089,7 +1090,7 @@ async function initAttendance() {
         ? `<option value="">Pilih barber</option>` + attendanceBarbers.map(b =>
             `<option value="${b.id}">${esc(b.name || b.email || "Barber")}${b.status === "inactive" ? " (Nonaktif)" : ""}</option>`
           ).join("")
-        : `<option value="">Belum ada akun barber</option>`;
+        : `<option value="">Belum ada akun barber di tabel profiles</option>`;
     } catch (error) {
       console.error("Gagal memuat daftar barber untuk absensi:", error);
       attendanceBarber.innerHTML = `<option value="">Gagal memuat daftar barber</option>`;
@@ -1098,21 +1099,21 @@ async function initAttendance() {
   }
 }
 async function loadAttendance() {
-  if ((!isAdmin() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
+  if ((!canManageAttendance() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
   attendanceList.textContent = "Memuat...";
   try {
     let query = supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value);
-    if (!isAdmin()) query = query.eq("barber_id", currentUser.id);
+    if (!canManageAttendance()) query = query.eq("barber_id", currentUser.id);
     const { data, error } = await query.order("created_at");
     if (error) throw error;
     const rows = data || [];
-    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = isAdmin() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
+    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = canManageAttendance() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
   } catch (error) { attendanceList.innerHTML = `<p class="error">Gagal memuat absensi: ${esc(error.message)}</p>`; }
 }
 attendanceDate?.addEventListener("change", loadAttendance);
 $("refreshAttendanceBtn")?.addEventListener("click", loadAttendance);
 $("attendanceForm")?.addEventListener("submit", async event => {
-  event.preventDefault(); if (!isAdmin() && currentProfile?.role !== "barber") return;
+  event.preventDefault(); if (!canManageAttendance() && currentProfile?.role !== "barber") return;
   try {
     const isBarber = currentProfile.role === "barber";
     if (isBarber && attendanceDate.value !== todayLocalISO()) throw new Error("Barber hanya dapat absen untuk tanggal hari ini.");
