@@ -814,15 +814,68 @@ async function loadTransactions() {
 }
 
 async function loadDashboard() {
+  const cashierRoles = ["kasir", "cashier"];
+  const isCashier = cashierRoles.includes(String(currentProfile?.role || "").toLowerCase());
+  const defaultDashboard = $("dashboardDefault");
+  const cashierDashboard = $("cashierDashboard");
+  if (defaultDashboard) defaultDashboard.hidden = isCashier;
+  if (cashierDashboard) cashierDashboard.hidden = !isCashier;
+
   try {
-    const transactions = await getTransactions(); const now = new Date();
-    const today = transactions.filter(t => { const d = new Date(t.transaction_date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate(); });
+    const now = new Date();
+    const isTodayTimestamp = value => {
+      if (!value) return false;
+      const d = new Date(value);
+      return !Number.isNaN(d.getTime()) &&
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+    };
+    const isTodayDate = value => String(value || "").slice(0, 10) === todayLocalISO();
+
+    if (isCashier) {
+      const [
+        { data: serviceRows, error: serviceError },
+        { data: productRows, error: productError },
+        { data: expenseRows, error: expenseError }
+      ] = await Promise.all([
+        supabaseClient.from("transactions").select("id, transaction_date, price_snapshot"),
+        supabaseClient.from("product_sales").select("id, sale_date, total_amount"),
+        supabaseClient.from("expenses").select("id, expense_date, amount")
+      ]);
+      if (serviceError) throw serviceError;
+      if (productError) throw productError;
+      if (expenseError) throw expenseError;
+
+      const serviceIncome = (serviceRows || []).filter(t => isTodayTimestamp(t.transaction_date))
+        .reduce((sum, t) => sum + Number(t.price_snapshot || 0), 0);
+      const productIncome = (productRows || []).filter(s => isTodayTimestamp(s.sale_date))
+        .reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+      const expenseTotal = (expenseRows || []).filter(e => isTodayDate(e.expense_date))
+        .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+      $("cashierServiceIncome").textContent = rupiah(serviceIncome);
+      $("cashierProductIncome").textContent = rupiah(productIncome);
+      $("cashierIncomeTotal").textContent = rupiah(serviceIncome + productIncome);
+      $("cashierExpenseTotal").textContent = rupiah(expenseTotal);
+      return;
+    }
+
+    const transactions = await getTransactions();
+    const today = transactions.filter(t => isTodayTimestamp(t.transaction_date));
     const omzet = today.reduce((a,t) => a + Number(t.price_snapshot || 0), 0);
     const barber = today.reduce((a,t) => a + Number(t.barber_share || 0), 0);
     const owner = today.reduce((a,t) => a + Number(t.owner_share || 0), 0);
     statOmzet.textContent = rupiah(omzet); statBarber.textContent = rupiah(barber); statOwner.textContent = rupiah(owner); statCount.textContent = today.length;
     recent.innerHTML = today.length ? today.slice(0,5).map(t => { const b=barbers.find(x=>x.id===t.barber_id), s=services.find(x=>x.id===t.service_id); return `<div class="list-row"><div><strong>${esc(s?.name || "Layanan")}</strong><div class="muted">${esc(b?.name || b?.email || "Barber")}</div></div><strong>${rupiah(t.price_snapshot)}</strong></div>`; }).join("") : `<p class="muted">Belum ada transaksi hari ini.</p>`;
-  } catch (error) { recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`; }
+  } catch (error) {
+    console.error("Gagal memuat dashboard:", error);
+    if (String(currentProfile?.role || "").toLowerCase() === "kasir" || String(currentProfile?.role || "").toLowerCase() === "cashier") {
+      $("cashierDashboard").innerHTML = `<h1>Dashboard</h1><p class="muted">Ringkasan pemasukan dan pengeluaran hari ini</p><p class="error">Gagal memuat data dashboard: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+    } else {
+      recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`;
+    }
+  }
 }
 
 function monthLabel(value) { return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`)); }
@@ -981,7 +1034,28 @@ async function initAttendance() {
     attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
     attendanceBarber.closest("label").hidden = false;
     attendancePresent.closest("label").hidden = false;
-    attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+
+    // Ambil profil barber khusus untuk absensi, termasuk barber nonaktif
+    // agar admin tetap dapat mencatat/melihat riwayat kehadiran.
+    attendanceBarber.innerHTML = `<option value="">Memuat daftar barber...</option>`;
+    try {
+      const { data, error } = await supabaseClient
+        .from("profiles")
+        .select("id,name,email,role,status")
+        .eq("role", "barber")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      const attendanceBarbers = data || [];
+      attendanceBarber.innerHTML = attendanceBarbers.length
+        ? `<option value="">Pilih barber</option>` + attendanceBarbers.map(b =>
+            `<option value="${b.id}">${esc(b.name || b.email || "Barber")}${b.status === "inactive" ? " (Nonaktif)" : ""}</option>`
+          ).join("")
+        : `<option value="">Belum ada akun barber</option>`;
+    } catch (error) {
+      console.error("Gagal memuat daftar barber untuk absensi:", error);
+      attendanceBarber.innerHTML = `<option value="">Gagal memuat daftar barber</option>`;
+      if (attendanceMessage) setMessage(attendanceMessage, `Daftar barber gagal dimuat: ${error.message || "Periksa izin akses profiles."}`, true);
+    }
   }
 }
 async function loadAttendance() {

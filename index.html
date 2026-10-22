@@ -50,17 +50,32 @@
     </nav>
 
     <section id="page-dashboard" class="page">
-      <h1>Dashboard</h1>
-      <p class="muted">Ringkasan hari ini</p>
-      <div class="stats">
-        <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
-        <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
-        <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
-        <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
+      <div id="dashboardDefault">
+        <h1>Dashboard</h1>
+        <p class="muted">Ringkasan hari ini</p>
+        <div class="stats">
+          <div class="stat"><span>Omzet</span><b id="statOmzet">Rp0</b></div>
+          <div class="stat"><span>Bagian Barber</span><b id="statBarber">Rp0</b></div>
+          <div class="stat"><span>Bagian Owner</span><b id="statOwner">Rp0</b></div>
+          <div class="stat"><span>Transaksi</span><b id="statCount">0</b></div>
+        </div>
+        <div class="card">
+          <h2>Transaksi terbaru</h2>
+          <div id="recent" class="muted">Memuat...</div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Transaksi terbaru</h2>
-        <div id="recent" class="muted">Memuat...</div>
+      <div id="cashierDashboard" hidden>
+        <h1>Dashboard</h1>
+        <p class="muted">Ringkasan pemasukan dan pengeluaran hari ini</p>
+        <div class="stats">
+          <div class="stat"><span>Total Pemasukan</span><b id="cashierIncomeTotal">Rp0</b></div>
+          <div class="stat"><span>Total Pengeluaran</span><b id="cashierExpenseTotal">Rp0</b></div>
+        </div>
+        <div class="card">
+          <h2>Rincian Pemasukan</h2>
+          <div class="list-row"><span>Penjualan jasa</span><strong id="cashierServiceIncome">Rp0</strong></div>
+          <div class="list-row"><span>Penjualan barang</span><strong id="cashierProductIncome">Rp0</strong></div>
+        </div>
       </div>
     </section>
 
