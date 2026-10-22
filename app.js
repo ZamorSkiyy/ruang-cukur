@@ -116,11 +116,14 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 }
 function isAdmin() { return ["owner", "admin"].includes(currentProfile?.role); }
+function canManageAttendance() { return isAdmin() || ["kasir", "cashier"].includes(String(currentProfile?.role || "").toLowerCase()); }
 function setMessage(el, message, error = false) { el.textContent = message || ""; el.classList.toggle("error", error); el.classList.toggle("success", !error && !!message); }
 function showLogin() { loginView.hidden = false; appView.hidden = true; }
 function showApp() { loginView.hidden = true; appView.hidden = false; }
 
 function showPage(page) {
+  // Akun barber hanya boleh melihat dashboard; semua input dilakukan melalui akun kasir.
+  if (String(currentProfile?.role || "").toLowerCase() === "barber" && page !== "dashboard") page = "dashboard";
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const target = $(`page-${page}`);
   if (target) target.hidden = false;
@@ -182,12 +185,25 @@ async function loadProfile() {
     throw new Error("Akun barber ini sedang nonaktif. Hubungi Owner/Admin.");
   }
   userLabel.textContent = `${data.email || currentUser.email} • ${data.role}`;
+  const isBarberAccount = String(data.role || "").toLowerCase() === "barber";
+  if (menuToggle) menuToggle.hidden = isBarberAccount;
+  if (currentPageLabel) currentPageLabel.hidden = isBarberAccount;
+  if (nav) nav.hidden = true;
+  // Barber is view-only: hide all navigation items except dashboard.
+  navButtons.forEach(button => { button.hidden = isBarberAccount && button.dataset.page !== "dashboard"; });
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
 }
-logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; showLogin(); });
+logoutBtn.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  currentUser = null; currentProfile = null;
+  if (menuToggle) menuToggle.hidden = false;
+  if (currentPageLabel) currentPageLabel.hidden = false;
+  navButtons.forEach(button => { button.hidden = false; });
+  showLogin();
+});
 
 async function loadServices() {
   const { data, error } = await supabaseClient
@@ -814,15 +830,92 @@ async function loadTransactions() {
 }
 
 async function loadDashboard() {
+  const role = String(currentProfile?.role || "").toLowerCase();
+  const isCashier = ["kasir", "cashier"].includes(role);
+  const isBarberAccount = role === "barber";
+  const defaultDashboard = $("dashboardDefault");
+  const cashierDashboard = $("cashierDashboard");
+  const barberDashboard = $("barberDashboard");
+  if (defaultDashboard) defaultDashboard.hidden = isCashier || isBarberAccount;
+  if (cashierDashboard) cashierDashboard.hidden = !isCashier;
+  if (barberDashboard) barberDashboard.hidden = !isBarberAccount;
+
   try {
-    const transactions = await getTransactions(); const now = new Date();
-    const today = transactions.filter(t => { const d = new Date(t.transaction_date); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate(); });
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthStartISO = todayLocalISODate(monthStart);
+    const nextMonthISO = todayLocalISODate(nextMonth);
+    const isTodayTimestamp = value => {
+      if (!value) return false;
+      const d = new Date(value);
+      return !Number.isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    };
+    const isTodayDate = value => String(value || "").slice(0, 10) === todayLocalISO();
+
+    if (isBarberAccount) {
+      const { data, error } = await supabaseClient.rpc("get_barber_dashboard_summary");
+      if (error) {
+        if (String(error.message || "").includes("get_barber_dashboard_summary")) {
+          throw new Error("Fungsi dashboard barber belum dipasang di Supabase. Jalankan file BARBER_DASHBOARD_RPC.sql di SQL Editor.");
+        }
+        throw error;
+      }
+      const summary = Array.isArray(data) ? data[0] : data;
+      if (!summary) throw new Error("Data penghasilan belum tersedia untuk periode ini.");
+      $("barberIncomeTotal").textContent = rupiah(summary.income);
+      $("barberPayrollMethod").textContent = `${summary.method_label} • Periode ${monthLabel(String(summary.period_month).slice(0,10))}`;
+      $("barberCustomerCount").textContent = String(summary.customer_count || 0);
+      $("barberAttendanceDays").textContent = String(summary.attendance_days || 0);
+      const breakdown = Array.isArray(summary.breakdown) ? summary.breakdown : [];
+      $("barberIncomeBreakdown").innerHTML = breakdown.length
+        ? breakdown.map(item => `<div class="list-row"><span>${esc(item.label)}</span><strong>${rupiah(item.amount)}</strong></div>`).join("")
+        : `<p class="muted">Belum ada rincian penghasilan.</p>`;
+      return;
+    }
+
+    if (isCashier) {
+      const [
+        { data: serviceRows, error: serviceError },
+        { data: productRows, error: productError },
+        { data: expenseRows, error: expenseError }
+      ] = await Promise.all([
+        supabaseClient.from("transactions").select("id, transaction_date, price_snapshot"),
+        supabaseClient.from("product_sales").select("id, sale_date, total_amount"),
+        supabaseClient.from("expenses").select("id, expense_date, amount")
+      ]);
+      if (serviceError) throw serviceError;
+      if (productError) throw productError;
+      if (expenseError) throw expenseError;
+      const serviceIncome = (serviceRows || []).filter(t => isTodayTimestamp(t.transaction_date)).reduce((sum, t) => sum + Number(t.price_snapshot || 0), 0);
+      const productIncome = (productRows || []).filter(s => isTodayTimestamp(s.sale_date)).reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+      const expenseTotal = (expenseRows || []).filter(e => isTodayDate(e.expense_date)).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      $("cashierServiceIncome").textContent = rupiah(serviceIncome);
+      $("cashierProductIncome").textContent = rupiah(productIncome);
+      $("cashierIncomeTotal").textContent = rupiah(serviceIncome + productIncome);
+      $("cashierExpenseTotal").textContent = rupiah(expenseTotal);
+      return;
+    }
+
+    const transactions = await getTransactions();
+    const today = transactions.filter(t => isTodayTimestamp(t.transaction_date));
     const omzet = today.reduce((a,t) => a + Number(t.price_snapshot || 0), 0);
     const barber = today.reduce((a,t) => a + Number(t.barber_share || 0), 0);
     const owner = today.reduce((a,t) => a + Number(t.owner_share || 0), 0);
     statOmzet.textContent = rupiah(omzet); statBarber.textContent = rupiah(barber); statOwner.textContent = rupiah(owner); statCount.textContent = today.length;
     recent.innerHTML = today.length ? today.slice(0,5).map(t => { const b=barbers.find(x=>x.id===t.barber_id), s=services.find(x=>x.id===t.service_id); return `<div class="list-row"><div><strong>${esc(s?.name || "Layanan")}</strong><div class="muted">${esc(b?.name || b?.email || "Barber")}</div></div><strong>${rupiah(t.price_snapshot)}</strong></div>`; }).join("") : `<p class="muted">Belum ada transaksi hari ini.</p>`;
-  } catch (error) { recent.innerHTML = `<p class="error">Gagal memuat dashboard: ${esc(error.message)}</p>`; }
+  } catch (error) {
+    console.error("Gagal memuat dashboard:", error);
+    const message = `<p class="error">Gagal memuat dashboard: ${esc(error.message || "Terjadi kesalahan.")}</p>`;
+    if (isBarberAccount && $("barberIncomeBreakdown")) $("barberIncomeBreakdown").innerHTML = message;
+    else if (isCashier && $("cashierDashboard")) $("cashierDashboard").innerHTML += message;
+    else recent.innerHTML = message;
+  }
+}
+
+function todayLocalISODate(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 10);
 }
 
 function monthLabel(value) { return new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`)); }
@@ -976,30 +1069,51 @@ async function initAttendance() {
     if (attendanceNotes) attendanceNotes.placeholder = "Catatan opsional";
     const submitBtn = document.querySelector('#attendanceForm button[type="submit"]');
     if (submitBtn) submitBtn.textContent = "Absen Hadir Hari Ini";
-  } else if (isAdmin()) {
+  } else if (canManageAttendance()) {
     if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
     attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
     attendanceBarber.closest("label").hidden = false;
     attendancePresent.closest("label").hidden = false;
-    attendanceBarber.innerHTML = (barbers || []).map(b => `<option value="${b.id}">${esc(b.name || b.email || "Barber")}</option>`).join("");
+
+    // Ambil profil barber khusus untuk absensi, termasuk barber nonaktif
+    // agar admin tetap dapat mencatat/melihat riwayat kehadiran.
+    attendanceBarber.innerHTML = `<option value="">Memuat daftar barber...</option>`;
+    try {
+      const { data, error } = await supabaseClient
+        .from("profiles")
+        .select("id,name,email,role,status")
+        .eq("role", "barber")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      const attendanceBarbers = data || [];
+      attendanceBarber.innerHTML = attendanceBarbers.length
+        ? `<option value="">Pilih barber</option>` + attendanceBarbers.map(b =>
+            `<option value="${b.id}">${esc(b.name || b.email || "Barber")}${b.status === "inactive" ? " (Nonaktif)" : ""}</option>`
+          ).join("")
+        : `<option value="">Belum ada akun barber di tabel profiles</option>`;
+    } catch (error) {
+      console.error("Gagal memuat daftar barber untuk absensi:", error);
+      attendanceBarber.innerHTML = `<option value="">Gagal memuat daftar barber</option>`;
+      if (attendanceMessage) setMessage(attendanceMessage, `Daftar barber gagal dimuat: ${error.message || "Periksa izin akses profiles."}`, true);
+    }
   }
 }
 async function loadAttendance() {
-  if ((!isAdmin() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
+  if ((!canManageAttendance() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
   attendanceList.textContent = "Memuat...";
   try {
     let query = supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value);
-    if (!isAdmin()) query = query.eq("barber_id", currentUser.id);
+    if (!canManageAttendance()) query = query.eq("barber_id", currentUser.id);
     const { data, error } = await query.order("created_at");
     if (error) throw error;
     const rows = data || [];
-    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = isAdmin() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
+    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = canManageAttendance() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
   } catch (error) { attendanceList.innerHTML = `<p class="error">Gagal memuat absensi: ${esc(error.message)}</p>`; }
 }
 attendanceDate?.addEventListener("change", loadAttendance);
 $("refreshAttendanceBtn")?.addEventListener("click", loadAttendance);
 $("attendanceForm")?.addEventListener("submit", async event => {
-  event.preventDefault(); if (!isAdmin() && currentProfile?.role !== "barber") return;
+  event.preventDefault(); if (!canManageAttendance() && currentProfile?.role !== "barber") return;
   try {
     const isBarber = currentProfile.role === "barber";
     if (isBarber && attendanceDate.value !== todayLocalISO()) throw new Error("Barber hanya dapat absen untuk tanggal hari ini.");
