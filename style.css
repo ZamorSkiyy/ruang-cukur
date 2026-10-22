@@ -612,3 +612,6 @@ input:focus, select:focus { border-color: #8c877e; outline: none; }
   padding: 12px 14px;
 }
 .page[hidden] { display: none !important; }
+
+/* Ensure hidden navigation controls stay hidden even when component styles set display. */
+.menu-toggle[hidden], .current-page-label[hidden] { display: none !important; }

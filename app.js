@@ -116,11 +116,14 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 }
 function isAdmin() { return ["owner", "admin"].includes(currentProfile?.role); }
+function canManageAttendance() { return isAdmin() || ["kasir", "cashier"].includes(String(currentProfile?.role || "").toLowerCase()); }
 function setMessage(el, message, error = false) { el.textContent = message || ""; el.classList.toggle("error", error); el.classList.toggle("success", !error && !!message); }
 function showLogin() { loginView.hidden = false; appView.hidden = true; }
 function showApp() { loginView.hidden = true; appView.hidden = false; }
 
 function showPage(page) {
+  // Akun barber hanya boleh melihat dashboard; semua input dilakukan melalui akun kasir.
+  if (String(currentProfile?.role || "").toLowerCase() === "barber" && page !== "dashboard") page = "dashboard";
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const target = $(`page-${page}`);
   if (target) target.hidden = false;
@@ -186,12 +189,21 @@ async function loadProfile() {
   if (menuToggle) menuToggle.hidden = isBarberAccount;
   if (currentPageLabel) currentPageLabel.hidden = isBarberAccount;
   if (nav) nav.hidden = true;
+  // Barber is view-only: hide all navigation items except dashboard.
+  navButtons.forEach(button => { button.hidden = isBarberAccount && button.dataset.page !== "dashboard"; });
   $("payrollSettingsNav").hidden = !isAdmin();
   barberManagerNav.hidden = !isAdmin();
   barberReportNav.hidden = !isAdmin();
   financeReportNav.hidden = !isAdmin();
 }
-logoutBtn.addEventListener("click", async () => { await supabaseClient.auth.signOut(); currentUser = null; currentProfile = null; if (menuToggle) menuToggle.hidden = false; if (currentPageLabel) currentPageLabel.hidden = false; showLogin(); });
+logoutBtn.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  currentUser = null; currentProfile = null;
+  if (menuToggle) menuToggle.hidden = false;
+  if (currentPageLabel) currentPageLabel.hidden = false;
+  navButtons.forEach(button => { button.hidden = false; });
+  showLogin();
+});
 
 async function loadServices() {
   const { data, error } = await supabaseClient
@@ -842,79 +854,23 @@ async function loadDashboard() {
     const isTodayDate = value => String(value || "").slice(0, 10) === todayLocalISO();
 
     if (isBarberAccount) {
-      const barberId = currentUser?.id;
-      if (!barberId) throw new Error("Akun barber tidak teridentifikasi.");
-      const [{ data: rules, error: rulesError }, { data: txRows, error: txError }, { data: attendanceRows, error: attendanceError }, { data: allBarbers, error: barberCountError }] = await Promise.all([
-        supabaseClient.from("payroll_settings").select("id,name,barber_id,method,base_salary,turnover_threshold,bonus_rate,barber_share_rate,owner_share_rate,daily_rate,commission_rate,effective_from,effective_to,status,created_at").eq("status", "active").lt("effective_from", nextMonthISO).or(`effective_to.is.null,effective_to.gte.${monthStartISO}`).order("effective_from", { ascending: false }).order("created_at", { ascending: false }),
-        supabaseClient.from("transactions").select("id,barber_id,transaction_date,price_snapshot,barber_share").eq("barber_id", barberId).gte("transaction_date", monthStart.toISOString()).lt("transaction_date", nextMonth.toISOString()),
-        supabaseClient.from("barber_attendance").select("id,barber_id,attendance_date,present").eq("barber_id", barberId).eq("present", true).gte("attendance_date", monthStartISO).lt("attendance_date", nextMonthISO),
-        supabaseClient.from("profiles").select("id").eq("role", "barber").eq("status", "active")
-      ]);
-      if (rulesError) throw new Error(`Aturan gaji: ${rulesError.message}`);
-      if (txError) throw new Error(`Transaksi: ${txError.message}`);
-      if (attendanceError) throw new Error(`Absensi: ${attendanceError.message}`);
-      if (barberCountError) throw new Error(`Data barber: ${barberCountError.message}`);
-
-      const applicableRules = (rules || []).filter(r => !r.effective_to || String(r.effective_to).slice(0,10) >= monthStartISO);
-      const rule = applicableRules.find(r => r.barber_id === barberId) || applicableRules.find(r => !r.barber_id);
-      if (!rule) throw new Error("Belum ada aturan payroll aktif yang berlaku untuk akun ini.");
-
-      const effectiveFrom = rule.method === "daily_plus_commission" && String(rule.effective_from).slice(0,10) > monthStartISO ? String(rule.effective_from).slice(0,10) : monthStartISO;
-      const transactions = (txRows || []).filter(t => String(t.transaction_date).slice(0,10) >= effectiveFrom);
-      const attendance = (attendanceRows || []).filter(a => String(a.attendance_date).slice(0,10) >= effectiveFrom);
-      const customerCount = transactions.length;
-      const attendanceDays = attendance.length;
-      const turnover = transactions.reduce((sum,t) => sum + Number(t.price_snapshot || 0), 0);
-      const barberShare = transactions.reduce((sum,t) => sum + Number(t.barber_share || 0), 0);
-      let income = 0, methodLabel = "", breakdown = [];
-
-      if (rule.method === "profit_share_50_50") {
-        const barberRate = Number(rule.barber_share_rate ?? 0.5);
-        income = turnover * barberRate;
-        methodLabel = `Bagi hasil (${(barberRate * 100).toLocaleString("id-ID")}% bagian barber)`;
-        breakdown = [
-          `<div class="list-row"><span>Omzet jasa bulan ini</span><strong>${rupiah(turnover)}</strong></div>`,
-          `<div class="list-row"><span>Bagian barber (${(Number(rule.barber_share_rate ?? 0.5) * 100).toLocaleString("id-ID")}% × omzet)</span><strong>${rupiah(income)}</strong></div>`
-        ];
-      } else if (rule.method === "daily_plus_commission") {
-        const dailyRate = Number(rule.daily_rate || 60000), commissionRate = Number(rule.commission_rate || 8000);
-        const dailyPay = attendanceDays * dailyRate, commission = customerCount * commissionRate;
-        income = dailyPay + commission;
-        methodLabel = "Gaji harian + komisi per pelanggan";
-        breakdown = [
-          `<div class="list-row"><span>${attendanceDays} hari hadir × ${rupiah(dailyRate)}</span><strong>${rupiah(dailyPay)}</strong></div>`,
-          `<div class="list-row"><span>${customerCount} pelanggan × ${rupiah(commissionRate)}</span><strong>${rupiah(commission)}</strong></div>`
-        ];
-      } else if (rule.method === "base_plus_turnover_bonus") {
-        const baseSalary = Number(rule.base_salary || 0), threshold = Number(rule.turnover_threshold || 0), bonusRate = Number(rule.bonus_rate || 0);
-        let bonus = 0;
-        if (rule.barber_id) {
-          bonus = Math.max(turnover - threshold, 0) * bonusRate;
-          methodLabel = "Gaji pokok + bonus omzet pribadi";
-        } else {
-          const { data: globalRows, error: globalError } = await supabaseClient.from("transactions").select("id,transaction_date,price_snapshot").gte("transaction_date", monthStart.toISOString()).lt("transaction_date", nextMonth.toISOString());
-          if (globalError) throw new Error(`Omzet toko: ${globalError.message}`);
-          const globalTurnover = (globalRows || []).reduce((sum,t) => sum + Number(t.price_snapshot || 0), 0);
-          const pool = Math.max(globalTurnover - threshold, 0) * bonusRate;
-          bonus = pool / Math.max((allBarbers || []).length, 1);
-          methodLabel = "Gaji pokok + bagian bonus omzet toko";
+      const { data, error } = await supabaseClient.rpc("get_barber_dashboard_summary");
+      if (error) {
+        if (String(error.message || "").includes("get_barber_dashboard_summary")) {
+          throw new Error("Fungsi dashboard barber belum dipasang di Supabase. Jalankan file BARBER_DASHBOARD_RPC.sql di SQL Editor.");
         }
-        income = baseSalary + bonus;
-        breakdown = [
-          `<div class="list-row"><span>Gaji pokok</span><strong>${rupiah(baseSalary)}</strong></div>`,
-          `<div class="list-row"><span>Omzet jasa barber</span><strong>${rupiah(turnover)}</strong></div>`,
-          `<div class="list-row"><span>Ambang bonus omzet</span><strong>${rupiah(threshold)}</strong></div>`,
-          `<div class="list-row"><span>Bonus omzet (${(bonusRate*100).toLocaleString("id-ID")}% sesuai aturan)</span><strong>${rupiah(bonus)}</strong></div>`
-        ];
-      } else {
-        throw new Error("Metode payroll tidak dikenali.");
+        throw error;
       }
-
-      $("barberIncomeTotal").textContent = rupiah(income);
-      $("barberPayrollMethod").textContent = `${methodLabel} • Periode ${monthLabel(monthStartISO)}`;
-      $("barberCustomerCount").textContent = String(customerCount);
-      $("barberAttendanceDays").textContent = String(attendanceDays);
-      $("barberIncomeBreakdown").innerHTML = breakdown.join("");
+      const summary = Array.isArray(data) ? data[0] : data;
+      if (!summary) throw new Error("Data penghasilan belum tersedia untuk periode ini.");
+      $("barberIncomeTotal").textContent = rupiah(summary.income);
+      $("barberPayrollMethod").textContent = `${summary.method_label} • Periode ${monthLabel(String(summary.period_month).slice(0,10))}`;
+      $("barberCustomerCount").textContent = String(summary.customer_count || 0);
+      $("barberAttendanceDays").textContent = String(summary.attendance_days || 0);
+      const breakdown = Array.isArray(summary.breakdown) ? summary.breakdown : [];
+      $("barberIncomeBreakdown").innerHTML = breakdown.length
+        ? breakdown.map(item => `<div class="list-row"><span>${esc(item.label)}</span><strong>${rupiah(item.amount)}</strong></div>`).join("")
+        : `<p class="muted">Belum ada rincian penghasilan.</p>`;
       return;
     }
 
@@ -1113,7 +1069,7 @@ async function initAttendance() {
     if (attendanceNotes) attendanceNotes.placeholder = "Catatan opsional";
     const submitBtn = document.querySelector('#attendanceForm button[type="submit"]');
     if (submitBtn) submitBtn.textContent = "Absen Hadir Hari Ini";
-  } else if (isAdmin()) {
+  } else if (canManageAttendance()) {
     if (!attendanceDate.value) attendanceDate.value = todayLocalISO();
     attendanceDate.removeAttribute("min"); attendanceDate.removeAttribute("max");
     attendanceBarber.closest("label").hidden = false;
@@ -1134,7 +1090,7 @@ async function initAttendance() {
         ? `<option value="">Pilih barber</option>` + attendanceBarbers.map(b =>
             `<option value="${b.id}">${esc(b.name || b.email || "Barber")}${b.status === "inactive" ? " (Nonaktif)" : ""}</option>`
           ).join("")
-        : `<option value="">Belum ada akun barber</option>`;
+        : `<option value="">Belum ada akun barber di tabel profiles</option>`;
     } catch (error) {
       console.error("Gagal memuat daftar barber untuk absensi:", error);
       attendanceBarber.innerHTML = `<option value="">Gagal memuat daftar barber</option>`;
@@ -1143,21 +1099,21 @@ async function initAttendance() {
   }
 }
 async function loadAttendance() {
-  if ((!isAdmin() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
+  if ((!canManageAttendance() && currentProfile?.role !== "barber") || !attendanceDate.value) return;
   attendanceList.textContent = "Memuat...";
   try {
     let query = supabaseClient.from("barber_attendance").select("id, barber_id, attendance_date, present, notes").eq("attendance_date", attendanceDate.value);
-    if (!isAdmin()) query = query.eq("barber_id", currentUser.id);
+    if (!canManageAttendance()) query = query.eq("barber_id", currentUser.id);
     const { data, error } = await query.order("created_at");
     if (error) throw error;
     const rows = data || [];
-    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = isAdmin() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
+    attendanceList.innerHTML = rows.length ? rows.map(a => { const b = barbers.find(x => x.id === a.barber_id); const label = canManageAttendance() ? (b?.name || b?.email || "Barber") : "Absensi saya"; return `<div class="list-row"><div><strong>${esc(label)}</strong><div class="muted">${a.present ? "HADIR" : "TIDAK HADIR"}${a.notes ? ` • ${esc(a.notes)}` : ""}</div></div>${isAdmin() ? `<button type="button" class="ghost" data-attendance-delete="${a.id}">Hapus</button>` : ""}</div>`; }).join("") : `<p class="muted">Belum ada absensi pada tanggal ini.</p>`;
   } catch (error) { attendanceList.innerHTML = `<p class="error">Gagal memuat absensi: ${esc(error.message)}</p>`; }
 }
 attendanceDate?.addEventListener("change", loadAttendance);
 $("refreshAttendanceBtn")?.addEventListener("click", loadAttendance);
 $("attendanceForm")?.addEventListener("submit", async event => {
-  event.preventDefault(); if (!isAdmin() && currentProfile?.role !== "barber") return;
+  event.preventDefault(); if (!canManageAttendance() && currentProfile?.role !== "barber") return;
   try {
     const isBarber = currentProfile.role === "barber";
     if (isBarber && attendanceDate.value !== todayLocalISO()) throw new Error("Barber hanya dapat absen untuk tanggal hari ini.");
